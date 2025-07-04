@@ -11,18 +11,22 @@ class Player(Enum):
         return Player.black if self == Player.white else Player.white
 
 
-class Point(namedtuple("Point", "row col")):
+class Point:
     """
     for immutability, and hashability
     also, access it as point.row and point.col instead of point[0] and point[1]
     """
 
+    def __init__(self, row, col):
+        self.row = row
+        self.col = col
+
     def neighbbors(self):
         return [
-            Point(self.row - 1, self.col),
-            Point(self.row + 1, self.col),
-            Point(self.row, self.col + 1),
-            Point(self.row, self.col - 1),
+            Point(self.row - 1, self.col),  # up
+            Point(self.row + 1, self.col),  # down
+            Point(self.row, self.col - 1),  # left
+            Point(self.row, self.col + 1),  # right
         ]
 
 
