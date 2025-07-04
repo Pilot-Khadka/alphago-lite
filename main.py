@@ -1,10 +1,40 @@
+import Enum
 import tkinter as tk
+from dataclasses import dataclass
+from typing import List
 
-# Constants
-EMPTY = 0
-BLACK = 1
-WHITE = 2
-BOARD_SIZE = 19
+
+class Player(Enum):
+    EMPTY = 0
+    BLACK = 1
+    WHITE = 2
+
+    def opponent(self):
+        if self == Player.BLACK:
+            return Player.WHITE
+        elif self == Player.WHITE:
+            return Player.BLACK
+        return Player.EMPTY
+
+
+@dataclass(frozen=True)
+class Point:
+    """Immutable point representation - crucial for hashing and AlphaGo features"""
+
+    row: int
+    col: int
+
+    def neighbors(self, board_size: int) -> List["Point"]:
+        """Get valid neighboring points"""
+        neighbors = []
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            nr, nc = self.row + dr, self.col + dc
+            if 0 <= nr < board_size and 0 <= nc < board_size:
+                neighbors.append(Point(nr, nc))
+        return neighbors
+
+    def __hash__(self):
+        return hash((self.row, self.col))
 
 
 class GO:
