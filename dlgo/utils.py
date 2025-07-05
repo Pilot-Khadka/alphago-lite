@@ -19,18 +19,6 @@ def print_move(player, move):
         print("%s %s" % (player, move_str))
 
 
-def print_board(board):
-    print("board size:", board.size)
-    for row in range(board.size, 0, -1):
-        bump = " " if row <= 9 else ""
-        line = []
-        for col in range(1, board.size + 1):
-            stone = board.get(gotypes.Point(row=row, col=col))
-            line.append(stone_to_char[stone])
-        print("%s%d %s" % (bump, row, "".join(line)))
-    print("" + " ".join(cols[: board.size]))
-
-
 class GoBoardDisplay:
     def __init__(self, board_size=19):
         self.board_size = board_size

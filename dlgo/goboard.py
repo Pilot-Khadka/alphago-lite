@@ -24,11 +24,11 @@ class Move:
         return Move(point=point)
 
     @classmethod
-    def pass_turn(cls, point):
+    def pass_turn(cls):
         return Move(is_pass=True)
 
     @classmethod
-    def resign(cls, point):
+    def resign(cls):
         return Move(is_resign=True)
 
 
@@ -121,10 +121,9 @@ class Board:
         # reduce liberties of opposite color group,
         # remove if captured
         for string in opposite_color_strings:
-            string.remove_liberty(point)
             replacement = string.without_liberty(point)
             if replacement.num_liberties:
-                self._replace_string(string.without_liberty(point))
+                self._replace_string(replacement)
             else:
                 self._remove_string(string)
 
@@ -161,11 +160,12 @@ class Board:
             for neighbor in point.neighbors():
                 neighbor_string = self._grid.get(neighbor)
                 if neighbor_string and neighbor_string is not string:
-                    neighbor_string.add_liberty(point)
-                    self._replace_string(neighbor_string.with_liberty(point))
-            del self._grid[point]
+                    updated_string = neighbor_string.with_liberty(point)
+                    self._replace_string(updated_string)
 
-            self._hash ^= zobrist.HASH_CODE[point, string.color]
+            if point in self._grid:
+                del self._grid[point]
+                self._hash ^= zobrist.HASH_CODE[point, string.color]
 
     def zobrist_hash(self):
         return self._hash
@@ -176,26 +176,46 @@ class GameState:
         self.board = board
         self.next_player = next_player
         self.previous_state = previous_state
-        if self.previous_state is None:
-            self.previous_state = frozenset()
-        else:
-            self.previous_state = frozenset(
-                previous_state.previous_state
-                | {previous_state.next_player, previous_state.board.zobrist_hash}
-            )
         self.last_move = last_move
+
+        if previous_state is None:
+            self.previous_positions = set()
+        else:
+            self.previous_positions = previous_state.previous_positions.copy()
+            self.previous_positions.add(
+                (previous_state.next_player, previous_state.board.zobrist_hash())
+            )
 
     def apply_move(self, move):
         """
         Return new gamestate after applying given move
         """
         if move.is_play:
-            next_board = copy.deepcopy(self.board)
+            next_board = self._copy_board()
             next_board.place_stone(self.next_player, move.point)
         else:
             next_board = self.board
 
         return GameState(next_board, self.next_player.other, self, move)
+
+    def _copy_board(self):
+        """more efficient board copying"""
+        new_board = Board(self.board.size)
+        new_board._grid = {}
+        new_board._hash = self.board._hash
+
+        string_map = {}
+        for point, string in self.board._grid.items():
+            string_id = id(string)
+            if string_id not in string_map:
+                string_map[string_id] = GoString(
+                    string.color,
+                    frozenset(string.stones),
+                    frozenset(string.liberties),
+                )
+            new_board._grid[point] = string_map[string_id]
+
+        return new_board
 
     @classmethod
     def new_game(cls, board_size):
@@ -214,6 +234,8 @@ class GameState:
 
         if self.last_move.is_resign:
             return True
+        if self.previous_state is None:
+            return False
 
         second_last_move = self.previous_state.last_move
         if second_last_move is None:
@@ -229,7 +251,7 @@ class GameState:
         if not move.is_play:
             return False
 
-        next_board = copy.deepcopy(self.board)
+        next_board = self._copy_board()
         next_board.place_stone(player, move.point)
         new_string = next_board.get_go_string(move.point)
         return new_string.num_liberties == 0
@@ -249,11 +271,10 @@ class GameState:
         if not move.is_play:
             return False
 
-        temp_board = copy.deepcopy(self.board)
+        temp_board = self._copy_board()
         temp_board.place_stone(player, move.point)
         next_situation = (player.other, temp_board.zobrist_hash())
-
-        return next_situation in self.previous_state
+        return next_situation in self.previous_positions
 
     def is_valid_move(self, move):
         if self.is_over():

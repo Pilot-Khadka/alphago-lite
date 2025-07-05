@@ -19,14 +19,17 @@ class Point:
     def __init__(self, row, col):
         self.row = row
         self.col = col
+        self._neighbors = None
 
     def neighbors(self):
-        return [
-            Point(self.row - 1, self.col),  # up
-            Point(self.row + 1, self.col),  # down
-            Point(self.row, self.col - 1),  # left
-            Point(self.row, self.col + 1),  # right
-        ]
+        if self._neighbors is None:
+            return [
+                Point(self.row - 1, self.col),  # up
+                Point(self.row + 1, self.col),  # down
+                Point(self.row, self.col - 1),  # left
+                Point(self.row, self.col + 1),  # right
+            ]
+        return self._neighbors
 
     def __eq__(self, other):
         """Two points are equal if they have the same row and col"""
