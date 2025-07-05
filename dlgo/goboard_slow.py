@@ -42,7 +42,8 @@ class GoString:
         self.liberties = set(liberties)
 
     def remove_liberty(self, point):
-        self.liberties.remove(point)
+        if point in self.liberties:
+            self.liberties.remove(point)
 
     def add_liberty(self, point):
         self.liberties.add(point)
@@ -50,7 +51,7 @@ class GoString:
     def merged_with(self, go_string):
         """
         Merge current stone with an existing chain
-        only when they are of same color
+        if  they are of same color
         """
         # only stones of same color can form a chain
         assert go_string.color == self.color, "Can merge only with same color"
@@ -83,9 +84,9 @@ class Board:
         assert self.is_on_board(point), "Move is outside the board"
         assert self.is_empty(point), "Point already occupied"
 
-        same_color_strigs = set()
-        opposite_color_strings = set()
-        liberties = set()
+        same_color_strigs = []
+        opposite_color_strings = []
+        liberties = []
 
         #  look at neighbors of the point
         for neighbor in point.neighbors():
@@ -93,13 +94,13 @@ class Board:
                 continue
 
             if self.is_empty(neighbor):
-                liberties.add(neighbor)
+                liberties.append(neighbor)
             else:
                 neighbor_group = self._grid.get(neighbor)
                 if neighbor_group.color == player:
-                    same_color_strigs.add(neighbor_group)
+                    same_color_strigs.append(neighbor_group)
                 else:
-                    opposite_color_strings.add(neighbor_group)
+                    opposite_color_strings.append(neighbor_group)
 
         # create new group with the placed stone
         new_string = GoString(player, [point], liberties)
@@ -138,7 +139,7 @@ class Board:
         """
         Return full gostring at the point, none if empty
         """
-        self._grid.get(point)
+        return self._grid.get(point)
 
     def _remove_string(self, string):
         """
@@ -149,7 +150,8 @@ class Board:
                 neighbor_string = self._grid.get(neighbor)
                 if neighbor_string and neighbor_string is not string:
                     neighbor_string.add_liberty(point)
-            self._grid[point] = None
+            # self._grid[point] = None
+            del self._grid[point]
 
 
 class GameState:
@@ -176,9 +178,7 @@ class GameState:
         """
         Create new game with given boardsize
         """
-        if isinstance(board_size, int):
-            board_size = (board_size, board_size)
-        board = Board(*board_size)
+        board = Board(board_size)
         return GameState(board, Player.black, None, None)
 
     def is_over(self):
@@ -197,6 +197,11 @@ class GameState:
         return self.last_move.is_pass and second_last_move.is_pass
 
     def is_move_self_capture(self, player, move):
+        """
+        simulate playing current move
+        if it results in zero liberties,
+        i.e no free neighborhood, it is not a valid move
+        """
         if not move.is_play:
             return False
 
@@ -204,6 +209,49 @@ class GameState:
         next_board.place_stone(player, move.point)
         new_string = next_board.get_go_string(move.point)
         return new_string.num_liberties == 0
+
+    @property
+    def situation(self):
+        return (self.next_player, self.board)
+
+    def does_move_violate_ko(self, player, move):
+        """
+        ko is a condition when a sucessive moves
+        results in the board being in previous position
+        eg:
+        black captures a piece of white, white can do the same
+        board positionn is the exact same as two moves previously
+        """
+        if not move.is_play:
+            return False
+
+        temp_board = copy.deepcopy(self.board)
+        temp_board.place_stone(player, move.point)
+        next_situation = (player.other, temp_board)
+
+        state = self.previous_state
+        while state:
+            if state.situation == next_situation:
+                return True
+            state = state.previous_state
+        return False
+
+    def is_valid_move(self, move):
+        if self.is_over():
+            return False
+
+        if move.is_pass or move.is_resign:
+            return True
+
+        # check if the board is empty
+        if self.board.get(move.point) is not None:
+            return False
+
+        is_empty = self.board.get(move.point) is None
+        not_suicide = not self.is_move_self_capture(self.next_player, move)
+        not_ko = not self.does_move_violate_ko(self.next_player, move)
+
+        return is_empty and not_suicide and not_ko
 
 
 if __name__ == "__main__":
