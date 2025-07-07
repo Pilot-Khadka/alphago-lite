@@ -68,6 +68,20 @@ class GoBoardDisplay:
         y = row * self.cell_size + self.margin
         return x, y
 
+    def pixel_to_board(self, x, y):
+        """convert pixel coordinates to board coordinates"""
+        col = round((x - self.margin) / self.cell_size)
+        row = round((y - self.margin) / self.cell_size)
+        return row, col
+
+    def on_click(self, event):
+        """Handle mouse click on the board"""
+        if self.click_callback:
+            row, col = self.pixel_to_board(event.x, event.y)
+            # Convert to 1-based indexing for game logic
+            if 0 <= row < self.board_size and 0 <= col < self.board_size:
+                self.click_callback(row + 1, col + 1)
+
     def draw_board(self):
         self.canvas.delete("all")
 

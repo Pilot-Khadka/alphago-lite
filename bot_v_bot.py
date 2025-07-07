@@ -1,7 +1,7 @@
 import time
 import statistics
 from dlgo import gotypes
-from dlgo import agent
+from dlgo.agent.mcts import MCTSBot
 from dlgo import goboard
 from dlgo.utils import print_move, GoBoardDisplay
 
@@ -10,8 +10,8 @@ def main():
     board_size = 19
     game = goboard.GameState.new_game(board_size)
     bots = {
-        gotypes.Player.black: agent.naive.RandomBot(),
-        gotypes.Player.white: agent.naive.RandomBot(),
+        gotypes.Player.black: MCTSBot(),
+        gotypes.Player.white: MCTSBot(),
     }
     display = GoBoardDisplay(board_size)
 

@@ -1,5 +1,4 @@
-import copy
-from dlgo.gotypes import Player
+from dlgo.gotypes import Player, Point
 from dlgo import zobrist
 
 
@@ -241,6 +240,40 @@ class GameState:
         if second_last_move is None:
             return False
         return self.last_move.is_pass and second_last_move.is_pass
+
+    def winner(self):
+        """
+        Determine winner of the game
+        Returns Player.black, Player.white, or None for draw
+        """
+        if not self.is_over():
+            return None
+
+        # If someone resigned, the other player wins
+        if self.last_move and self.last_move.is_resign:
+            return self.next_player  # The player who didn't resign
+
+        return self._count_stones_winner()
+
+    def _count_stones_winner(self):
+        black_stones = 0
+        white_stones = 0
+
+        for r in range(1, self.board.size + 1):
+            for c in range(1, self.board.size + 1):
+                point = Point(row=r, col=c)
+                stone = self.board.get(point)
+                if stone == Player.black:
+                    black_stones += 1
+                elif stone == Player.white:
+                    white_stones += 1
+
+        if black_stones > white_stones:
+            return Player.black
+        elif white_stones > black_stones:
+            return Player.white
+        else:
+            return None  # Draw
 
     def is_move_self_capture(self, player, move):
         """
