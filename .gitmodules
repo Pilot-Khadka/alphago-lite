@@ -1,0 +1,3 @@
+[submodule "dlgo/data/computer-go-dataset"]
+	path = dlgo/data/computer-go-dataset
+	url = https://github.com/yenw/computer-go-dataset
