@@ -1,7 +1,7 @@
 import time
 import statistics
 from dlgo import gotypes
-from dlgo.agent.mcts import MCTSBot
+from dlgo.mcts.mcts import MCTSBot
 from dlgo import goboard
 from dlgo.utils import print_move, GoBoardDisplay
 
@@ -27,6 +27,7 @@ def main():
 
         display.update_board(game.board)
         bot_move = bots[game.next_player].select_move(game)
+        print("bot move:", bot_move)
         print_move(game.next_player, bot_move)
         game = game.apply_move(bot_move)
 
