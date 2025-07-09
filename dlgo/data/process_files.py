@@ -19,6 +19,9 @@ def sgf_to_coords(sgf_coord):
 def extract_moves(sgf_string):
     moves = []
 
+    # does this game have handicap?
+    handicap_info = extract_handicap_info(sgf_string)
+
     # Find all B[...] and W[...] patterns
     pattern = r"([BW])\[([a-s]{2}|)\]"
     matches = re.findall(pattern, sgf_string)
@@ -28,7 +31,7 @@ def extract_moves(sgf_string):
         move = sgf_to_coords(coord)
         moves.append((color, move))
 
-    return moves
+    return moves, handicap_info
 
 
 def read_txt_files(folder_path):
@@ -50,7 +53,7 @@ def read_txt_files(folder_path):
 def extract_winner(sgf_string):
     # look for RE[]
     # RE[B->R] : black wins by resignation
-    # RE[W+12.5] white wins by 12.5 points
+    # RE[W+12.5] white wins by 12.5 points, etc
     result_match = re.search(r"RE\[([^\]]+)\]", sgf_string)
 
     if not result_match:
@@ -58,7 +61,6 @@ def extract_winner(sgf_string):
 
     result_str = result_match.group(1)
 
-    # Parse different result formats
     if result_str == "0" or result_str.upper() == "DRAW":
         return None, 0, "Draw"
     elif result_str == "?" or result_str.upper() == "UNKNOWN":
@@ -68,7 +70,7 @@ def extract_winner(sgf_string):
         if "R" in result_str.upper():
             return "black", None, "Black wins by resignation"
         else:
-            # Extract point margin
+            # point margin -> points player won by
             points_match = re.search(r"([0-9.]+)", result_str)
             points = float(points_match.group(1)) if points_match else 0
             return "black", points, f"Black wins by {points} points"
@@ -77,12 +79,51 @@ def extract_winner(sgf_string):
         if "R" in result_str.upper():
             return "white", None, "White wins by resignation"
         else:
-            # Extract point margin
+            # point margin -> points player won by
             points_match = re.search(r"([0-9.]+)", result_str)
             points = float(points_match.group(1)) if points_match else 0
             return "white", points, f"White wins by {points} points"
 
     return None, None, f"Unknown result format: {result_str}"
+
+
+def extract_handicap_info(sgf_string):
+    handicap_info = {
+        "handicap_count": 0,
+        "handicap_stones": [],
+        "komi": 6.5,  # default komi
+        "is_handicap_game": False,
+    }
+
+    # check for handicap count
+    ha_match = re.search(r"HA\[(\d+)\]", sgf_string)
+    if ha_match:
+        handicap_info["handicap_count"] = int(ha_match.group(1))
+        handicap_info["is_handicap_game"] = True
+
+    # check komi
+    komi_match = re.search(r"KM\[([0-9.-]+)\]", sgf_string)
+    if komi_match:
+        handicap_info["komi"] = float(komi_match.group(1))
+
+    # handicap stone position from AB property
+    ab_match = re.search(r"AB(\[[a-s]{2}\])+", sgf_string)
+    if ab_match:
+        # find all coordinate pairs in AB property
+        coords = re.findall(r"\[([a-s]{2})\]", ab_match.group(0))
+        for coord in coords:
+            if len(coord) == 2:
+                col = ord(coord[0]) - ord("a") + 1
+                row = ord(coord[1]) - ord("a") + 1
+                handicap_info["handicap_stones"].append((row, col))
+
+        # handicap stones found, but not HA proprty, count is inferred
+        if not handicap_info["is_handicap_game"] and handicap_info["handicap_stones"]:
+            handicap_info["handicap_count"] = len(
+                handicap_info["handicap_stones"])
+            handicap_info["is_handicap_game"] = True
+
+    return handicap_info
 
 
 if __name__ == "__main__":
