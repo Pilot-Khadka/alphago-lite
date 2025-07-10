@@ -34,8 +34,7 @@ class Point:
     def __eq__(self, other):
         """Two points are equal if they have the same row and col"""
         return (
-            isinstance(
-                other, Point) and self.row == other.row and self.col == other.col
+            isinstance(other, Point) and self.row == other.row and self.col == other.col
         )
 
     def __hash__(self):
