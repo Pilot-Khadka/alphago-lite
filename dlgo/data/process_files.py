@@ -41,7 +41,6 @@ def read_txt_files(folder_path):
             print(f"\nReading: {file_path}")
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                print(content[:500])
 
         games = content.split("\n")  # each SGF game is on its own line
         games = [game for game in games if game.strip()]  # remove empty lines

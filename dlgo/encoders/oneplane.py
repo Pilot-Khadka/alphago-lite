@@ -1,7 +1,7 @@
 import numpy as np
 
 from dlgo.encoders.base import Encoder
-from dlgo.goboard import Point
+from dlgo.goboard import Point, Player
 
 
 def create(board_size):
@@ -32,7 +32,8 @@ class OnePlaneEncoder(Encoder):
                 if go_string is None:
                     continue
 
-                board_matrix[0, row, col] = 1 if go_string.color == next_player else -1
+                board_matrix[0, row,
+                             col] = 1 if go_string.color == next_player else -1
 
         return board_matrix
 
