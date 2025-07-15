@@ -1,5 +1,6 @@
 from dlgo.gotypes import Player, Point
 from dlgo import zobrist
+import numpy as np
 
 
 class Move:

@@ -1,0 +1,22 @@
+[project]
+name = "alphago-and-beyond"
+version = "0.1.0"
+description = "Implementation of alphago and alphazero"
+readme = "README.md"
+authors = [
+    { name = "Pilot-Khadka", email = "khdpilot@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.3.1",
+    "tensorboard>=2.19.0",
+    "torch>=2.7.1",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+alphago-and-beyond = "alphago_and_beyond:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

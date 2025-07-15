@@ -1,6 +1,7 @@
 # large files - you can extract them 
 dlgo/data/go_games/pro1940-1999.txt
 dlgo/data/go_games/pro2000+.txt
+checkpoints/
 
 
 # Byte-compiled / optimized / DLL files
