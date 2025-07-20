@@ -1,5 +1,6 @@
 import os
 import torch
+
 from dlgo.data.data_processor import GoDataProcessor
 from dlgo.encoders.oneplane import OnePlaneEncoder
 from dlgo.networks import small
@@ -9,8 +10,8 @@ from dlgo.networks.trainer import GoTrainer, GoEvaluator
 def main():
     board_size = 19
     data_dir = "dlgo/data/go_games/"
-    train_games = 20000
-    val_games = 1000
+    train_games = 100
+    val_games = 100
 
     encoder = OnePlaneEncoder(board_size)
 

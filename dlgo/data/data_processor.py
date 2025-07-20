@@ -25,12 +25,16 @@ class GoDataProcessor:
         return self.all_games
 
     def _create_train_val_split(
-        self, train_samples=800, val_samples=200, random_seed=42
+        self, train_samples=None, val_samples=None, random_seed=42
     ):
         all_games = self._load_all_games()
         random.seed(random_seed)
         shuffled_games = all_games.copy()
         random.shuffle(shuffled_games)
+
+        if train_samples is None or val_samples is None:
+            train_samples = int(len(shuffled_games) * 0.9)
+            val_samples = int(len(shuffled_games) * (1 - 0.9))
 
         total_needed = train_samples + val_samples
         if len(shuffled_games) < total_needed:
@@ -39,14 +43,14 @@ class GoDataProcessor:
             val_samples = len(shuffled_games) - train_samples
 
         self.train_games = shuffled_games[:train_samples]
-        self.val_games = shuffled_games[train_samples : train_samples + val_samples]
+        self.val_games = shuffled_games[train_samples: train_samples + val_samples]
 
-        print(f"Data split complete:")
+        print("Data split complete:")
         print(f"  - Train games: {len(self.train_games):,}")
         print(f"  - Validation games: {len(self.val_games):,}")
         print(
-            f"  - Total used: {len(self.train_games) + len(self.val_games):,}/{
-                len(all_games):,}"
+            f"""  - Total used: {len(self.train_games) + len(self.val_games):,}/{
+                len(all_games):,}"""
         )
         print(f"  - Random seed: {random_seed}")
 
@@ -103,7 +107,7 @@ class GoDataProcessor:
             all_games.extend(games)
 
         print(f"Total games: {len(all_games)}")
-        return games
+        return all_games
 
     def process_games(self, games):
         all_features = []
@@ -150,7 +154,8 @@ class GoDataProcessor:
         moves, handicap_info = extract_moves(sgf_content)
         if handicap_info["is_handicap_game"]:
             # setup game with handicap
-            game, handicap_moves = setup_handicap_game(board_size, handicap_info)
+            game, handicap_moves = setup_handicap_game(
+                board_size, handicap_info)
 
         for move in moves:
             color, (row, col) = move
@@ -175,8 +180,8 @@ class GoDataProcessor:
 
     def create_train_val_loaders(
         self,
-        train_samples=800,
-        val_samples=200,
+        train_samples=None,
+        val_samples=None,
         batch_size=32,
         shuffle_train=True,
         num_workers=2,

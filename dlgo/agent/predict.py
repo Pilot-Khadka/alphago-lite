@@ -1,0 +1,22 @@
+import numpy as np
+
+from dlgo.agent.base import Agent
+from dlgo.agent.helpers import is_point_and_eye
+from dlgo import encoders
+from dlgo import goboard
+
+
+class DeepLearningAgent(Agent):
+    def __init__(self, model, encoder):
+        Agent.__init__(self)
+        self.model = model
+        self.encoder = encoder
+
+    def predict(self, game_state):
+        encoded_state = self.encoder.encode(game_state)
+        input_tensor = np.array([encoded_state])
+        return self.model.predict(input_tensor)[0]
+
+    def select_move(self, game_state):
+        num_moves = self.encoder.board_size * self.encoder.board_size
+        move_prob = self.predict(game_state)
