@@ -40,8 +40,9 @@ class GoTrainer:
         )
 
         self.writer = SummaryWriter(
-            log_dir=f"runs/go_training_{
-                datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            log_dir=f"""
+            runs/go_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}
+            """
         )
 
         self.train_history = {
@@ -83,8 +84,7 @@ class GoTrainer:
             correct += (predicted == target).sum().item()
 
             pbar.set_postfix(
-                {"Loss": f"{loss.item():.4f}", "Acc": f"{
-                    100.0 * correct / total:.2f}%"}
+                {"Loss": f"{loss.item():.4f}", "Acc": f"{100.0 * correct / total:.2f}%"}
             )
 
             if batch_idx % 100 == 0:
@@ -150,8 +150,7 @@ class GoTrainer:
         if is_best:
             best_path = os.path.join(self.save_dir, "best_checkpoint.pth")
             torch.save(checkpoint, best_path)
-            print(f"New best model saved with validation accuracy: {
-                  val_accuracy:.2f}%")
+            print(f"New best model saved with validation accuracy: {val_accuracy:.2f}%")
 
     def load_checkpoint(self, checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
@@ -173,8 +172,7 @@ class GoTrainer:
 
         print(f"Starting training for {num_epochs} epochs")
         print(f"Device: {self.device}")
-        print(f"Model parameters: {sum(p.numel()
-              for p in self.model.parameters()):,}")
+        print(f"Model parameters: {sum(p.numel() for p in self.model.parameters()):,}")
 
         start_time = time.time()
 

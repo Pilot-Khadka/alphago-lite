@@ -1,6 +1,7 @@
 import os
 import random
 import numpy as np
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from dlgo.gotypes import Point
@@ -40,8 +41,14 @@ class GoDataProcessor:
         self.train_games = shuffled_games[:train_samples]
         self.val_games = shuffled_games[train_samples : train_samples + val_samples]
 
-        print(f"Train games: {len(self.train_games)}")
-        print(f"Validation games: {len(self.val_games)}")
+        print(f"Data split complete:")
+        print(f"  - Train games: {len(self.train_games):,}")
+        print(f"  - Validation games: {len(self.val_games):,}")
+        print(
+            f"  - Total used: {len(self.train_games) + len(self.val_games):,}/{
+                len(all_games):,}"
+        )
+        print(f"  - Random seed: {random_seed}")
 
     def load_go_data(
         self,
@@ -101,15 +108,35 @@ class GoDataProcessor:
     def process_games(self, games):
         all_features = []
         all_labels = []
+        total_moves = 0
+        failed_games = 0
+        successful_games = 0
 
-        for i, sgf_content in enumerate(games):
-            game_data = self.parse_sgf_game(sgf_content)
-            if game_data:
-                all_features.extend(game_data["features"])
-                all_labels.extend(game_data["labels"])
+        pbar = tqdm(games, desc="Processing games", unit="game")
 
-            if i % 100 == 0:
-                print(f"Processed {i} games...")
+        for i, sgf_content in enumerate(pbar):
+            try:
+                game_data = self.parse_sgf_game(sgf_content)
+
+                if game_data:
+                    all_features.extend(game_data["features"])
+                    all_labels.extend(game_data["labels"])
+                    total_moves += game_data["num_moves"]
+                    successful_games += 1
+            except Exception:
+                failed_games += 1
+                continue
+
+            pbar.set_postfix(
+                {
+                    "Moves": f"{total_moves:,}",
+                    "Success": f"{successful_games}/{i + 1}",
+                    "Failed": failed_games,
+                    "Features": f"{len(all_features):,}",
+                }
+            )
+
+        pbar.close()
 
         return np.array(all_features), np.array(all_labels)
 
