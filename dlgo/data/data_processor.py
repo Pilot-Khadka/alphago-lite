@@ -75,8 +75,6 @@ class GoDataProcessor:
         max_moves_per_game=None,
         pin_memory=True,
     ):
-        """Create a PyTorch DataLoader for the specified data split"""
-
         if data_type == "train":
             if self.train_games is None:
                 raise ValueError(
