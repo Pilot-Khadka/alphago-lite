@@ -1,14 +1,9 @@
 import os
 import random
-import numpy as np
-from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-from dlgo.gotypes import Point
-from dlgo.goboard import GameState, Move
-from dlgo.data.process_files import extract_moves, setup_handicap_game
 from dlgo.encoders.base import get_encoder_by_name
-from dlgo.data.generator import GoDataset
+from dlgo.data.generator import GoGameDataset
 
 
 class GoDataProcessor:
@@ -43,7 +38,7 @@ class GoDataProcessor:
             val_samples = len(shuffled_games) - train_samples
 
         self.train_games = shuffled_games[:train_samples]
-        self.val_games = shuffled_games[train_samples: train_samples + val_samples]
+        self.val_games = shuffled_games[train_samples : train_samples + val_samples]
 
         print("Data split complete:")
         print(f"  - Train games: {len(self.train_games):,}")
@@ -54,46 +49,8 @@ class GoDataProcessor:
         )
         print(f"  - Random seed: {random_seed}")
 
-    def load_go_data(
-        self,
-        data_type="train",
-        num_samples=1000,
-        batch_size=32,
-        shuffle=True,
-        num_workers=2,
-    ):
-        if data_type == "train":
-            if self.train_games is None:
-                raise ValueError(
-                    "Train/val split not created. Call create_train_val_loaders first."
-                )
-            games = self.train_games
-        elif data_type == "val":
-            if self.val_games is None:
-                raise ValueError(
-                    "Train/val split not created. Call create_train_val_loaders first."
-                )
-            games = self.val_games
-        else:  # load from all games
-            games = self._load_all_games()
-            if num_samples < len(games):
-                if shuffle:
-                    games = random.sample(games, num_samples)
-                else:
-                    games = games[:num_samples]
-
-        features, labels = self.process_games(games)
-        dataset = GoDataset(features, labels)
-
-        return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            num_workers=num_workers,
-            drop_last=False,
-        )
-
     def read_games_from_file(self, data_dir):
+        """Read all SGF games from text files"""
         all_games = []
         for file_name in os.listdir(data_dir):
             if file_name.endswith(".txt"):
@@ -102,81 +59,54 @@ class GoDataProcessor:
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
-            games = content.split("\n")  # each SGF game is on its own line
-            games = [game for game in games if game.strip()]
-            all_games.extend(games)
+                games = content.split("\n")
+                games = [game for game in games if game.strip()]
+                all_games.extend(games)
 
-        print(f"Total games: {len(all_games)}")
+        print(f"Total games loaded: {len(all_games):,}")
         return all_games
 
-    def process_games(self, games):
-        all_features = []
-        all_labels = []
-        total_moves = 0
-        failed_games = 0
-        successful_games = 0
+    def create_dataloader(
+        self,
+        data_type="train",
+        batch_size=32,
+        shuffle=True,
+        num_workers=2,
+        max_moves_per_game=None,
+        pin_memory=True,
+    ):
+        """Create a PyTorch DataLoader for the specified data split"""
 
-        pbar = tqdm(games, desc="Processing games", unit="game")
-
-        for i, sgf_content in enumerate(pbar):
-            try:
-                game_data = self.parse_sgf_game(sgf_content)
-
-                if game_data:
-                    all_features.extend(game_data["features"])
-                    all_labels.extend(game_data["labels"])
-                    total_moves += game_data["num_moves"]
-                    successful_games += 1
-            except Exception:
-                failed_games += 1
-                continue
-
-            pbar.set_postfix(
-                {
-                    "Moves": f"{total_moves:,}",
-                    "Success": f"{successful_games}/{i + 1}",
-                    "Failed": failed_games,
-                    "Features": f"{len(all_features):,}",
-                }
+        if data_type == "train":
+            if self.train_games is None:
+                raise ValueError(
+                    "Train/val split not created. Call create_train_val_split first."
+                )
+            games = self.train_games
+        elif data_type == "val":
+            if self.val_games is None:
+                raise ValueError(
+                    "Train/val split not created. Call create_train_val_split first."
+                )
+            games = self.val_games
+        elif data_type == "all":
+            games = self._load_all_games()
+        else:
+            raise ValueError(
+                f"Invalid data_type: {data_type}. Use 'train', 'val', or 'all'"
             )
 
-        pbar.close()
+        dataset = GoGameDataset(games, self.encoder, max_moves_per_game)
 
-        return np.array(all_features), np.array(all_labels)
-
-    def parse_sgf_game(self, sgf_content):
-        board_size = 19
-        game = GameState.new_game(board_size)
-
-        features = []
-        labels = []
-
-        moves, handicap_info = extract_moves(sgf_content)
-        if handicap_info["is_handicap_game"]:
-            # setup game with handicap
-            game, handicap_moves = setup_handicap_game(
-                board_size, handicap_info)
-
-        for move in moves:
-            color, (row, col) = move
-            point = Point(row, col)
-            board_tensor = self.encoder.encode(game)
-            move_index = self.encoder.encode_point(point)
-
-            label = np.zeros(self.encoder.num_points())
-            label[move_index] = 1
-
-            features.append(board_tensor)
-            labels.append(label)
-
-            move_obj = Move.play(point)
-            game = game.apply_move(move_obj)
-        return {
-            "features": np.array(features),
-            "labels": np.array(labels),
-            "num_moves": len(moves),
-            "board_size": board_size,
-        }
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=True if data_type == "train" else False,
+            persistent_workers=True if num_workers > 0 else False,
+        )
 
     def create_train_val_loaders(
         self,
@@ -186,22 +116,24 @@ class GoDataProcessor:
         shuffle_train=True,
         num_workers=2,
         random_seed=42,
+        max_moves_per_game=None,
     ):
         self._create_train_val_split(train_samples, val_samples, random_seed)
-        train_loader = self.load_go_data(
+
+        train_loader = self.create_dataloader(
             data_type="train",
-            num_samples=train_samples,
             batch_size=batch_size,
             shuffle=shuffle_train,
             num_workers=num_workers,
+            max_moves_per_game=max_moves_per_game,
         )
 
-        val_loader = self.load_go_data(
+        val_loader = self.create_dataloader(
             data_type="val",
-            num_samples=val_samples,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
+            max_moves_per_game=max_moves_per_game,
         )
 
         return train_loader, val_loader

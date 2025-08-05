@@ -40,9 +40,7 @@ class GoTrainer:
         )
 
         self.writer = SummaryWriter(
-            log_dir=f"""
-            runs/go_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}
-            """
+            log_dir=f"""runs/go_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}"""
         )
 
         self.train_history = {
