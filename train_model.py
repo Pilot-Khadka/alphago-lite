@@ -1,14 +1,17 @@
 import torch
 from torch.nn.parallel import DataParallel
 
+from dlgo.data.fast_data_processor import FastGoDataProcessor
 from dlgo.data.data_processor import GoDataProcessor
 from dlgo.encoders.oneplane import OnePlaneEncoder
 from dlgo.networks import small
 from dlgo.networks.trainer import GoTrainer
 
+BATCH_SIZE = 64
+NUM_WORKERS = 4
+
 
 def train_single_gpu(config):
-    """Training function for single GPU or CPU"""
     print("=== Single GPU/CPU Training ===")
 
     board_size = 19
@@ -19,14 +22,10 @@ def train_single_gpu(config):
     )
 
     # data loaders (non-distributed)
+    processor = FastGoDataProcessor()
+    processor.load_preprocessed_data()
     train_loader, val_loader = processor.create_train_val_loaders(
-        train_samples=config["train_games"],
-        val_samples=config["val_games"],
-        batch_size=config["batch_size"],
-        shuffle_train=True,
-        num_workers=config["num_workers"],
-        max_moves_per_game=config.get("max_moves_per_game", None),
-        random_seed=42,
+        train_ratio=0.9, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, random_seed=42
     )
 
     input_shape = (encoder.num_planes, board_size, board_size)
