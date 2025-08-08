@@ -1,13 +1,57 @@
 import os
 import torch
-
 import torch.multiprocessing as mp
+from torch.utils.data.distributed import DistributedSampler
+
 from dlgo.encoders.oneplane import OnePlaneEncoder
 from dlgo.networks.ddp import setup_ddp, cleanup_ddp
 from dlgo.networks.trainer import GoTrainer, GoEvaluator
 from dlgo.networks import small
-from dlgo.data.fast_data_processor import FastGoDataProcessor
-from torch.utils.data.distributed import DistributedSampler
+from dlgo.data.data_loader import GoDataProcessor
+
+
+def create_distributed_dataset_and_loaders(processor, config, rank, world_size):
+    train_dataset = processor.create_dataset(
+        data_type="train",
+        max_samples_per_game=config.get("max_samples_per_game", None),
+        shuffle_moves=True,  # Shuffle moves within games for training diversity
+    )
+
+    val_dataset = processor.create_dataset(
+        data_type="val",
+        max_samples_per_game=config.get("max_samples_per_game", None),
+        shuffle_moves=False,  # Don't shuffle validation data
+    )
+
+    train_sampler = DistributedSampler(
+        train_dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+    )
+
+    val_sampler = DistributedSampler(
+        val_dataset, num_replicas=world_size, rank=rank, shuffle=False, drop_last=False
+    )
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=config["batch_size"] // world_size,
+        sampler=train_sampler,
+        num_workers=config["num_workers"],
+        pin_memory=True,
+        drop_last=True,
+        persistent_workers=True if config["num_workers"] > 0 else False,
+    )
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=config["batch_size"] // world_size,
+        sampler=val_sampler,
+        num_workers=config["num_workers"],
+        pin_memory=True,
+        drop_last=False,
+        persistent_workers=True if config["num_workers"] > 0 else False,
+    )
+
+    return train_loader, val_loader, train_sampler, val_sampler
 
 
 def train_ddp_worker(rank, world_size, config):
@@ -18,70 +62,41 @@ def train_ddp_worker(rank, world_size, config):
         board_size = 19
         encoder = OnePlaneEncoder(board_size)
 
-        processor = FastGoDataProcessor(
-            processed_data_directory=config["processed_data_dir"]
-        )
+        processor = GoDataProcessor(
+            data_directory=config["processed_data_dir"])
 
-        # load data only on rank 0 to avoid race condition
         if rank == 0:
-            print("Loading preprocessed data...")
-            processor.load_preprocessed_data(
-                data_file=config.get("data_file", None),
-                metadata_file=config.get("metadata_file", None),
-            )
-
-            processor.create_train_val_split(
+            print("Creating train/val split...")
+            split_info = processor.create_train_val_test_split(
                 train_ratio=config["train_ratio"],
-                random_seed=42,
+                val_ratio=config["val_ratio"],
+                test_ratio=config.get("test_ratio", 0.0),
+                random_seed=config.get("random_seed", 42),
             )
+            print(f"Split info: {split_info}")
 
         torch.distributed.barrier()
 
-        # load data on other ranks
         if rank != 0:
-            processor.load_preprocessed_data(
-                data_file=config.get("data_file", None),
-                metadata_file=config.get("metadata_file", None),
-            )
-
-            processor.create_train_val_split(
+            processor.create_train_val_test_split(
                 train_ratio=config["train_ratio"],
-                random_seed=42,
+                val_ratio=config["val_ratio"],
+                test_ratio=config.get("test_ratio", 0.0),
+                random_seed=config.get("random_seed", 42),
             )
 
-        train_sampler = DistributedSampler(
-            torch.utils.data.Subset(processor.dataset, processor.train_indices),
-            num_replicas=world_size,
-            rank=rank,
-            shuffle=True,
+        train_loader, val_loader, train_sampler, val_sampler = (
+            create_distributed_dataset_and_loaders(
+                processor, config, rank, world_size)
         )
 
-        val_sampler = DistributedSampler(
-            torch.utils.data.Subset(processor.dataset, processor.val_indices),
-            num_replicas=world_size,
-            rank=rank,
-            shuffle=False,
-        )
+        if rank == 0:
+            print(f"Train loader: {len(train_loader)} batches per GPU")
+            print(f"Val loader: {len(val_loader)} batches per GPU")
 
-        train_loader = torch.utils.data.DataLoader(
-            torch.utils.data.Subset(processor.dataset, processor.train_indices),
-            batch_size=config["batch_size"] // world_size,
-            sampler=train_sampler,
-            num_workers=config["num_workers"],
-            pin_memory=True,
-            drop_last=True,
-            persistent_workers=True if config["num_workers"] > 0 else False,
-        )
+            stats = processor.get_data_stats()
+            print(f"Data statistics: {stats}")
 
-        val_loader = torch.utils.data.DataLoader(
-            torch.utils.data.Subset(processor.dataset, processor.val_indices),
-            batch_size=config["batch_size"] // world_size,
-            sampler=val_sampler,
-            num_workers=config["num_workers"],
-            pin_memory=True,
-            drop_last=False,
-            persistent_workers=True if config["num_workers"] > 0 else False,
-        )
         input_shape = (encoder.num_planes, board_size, board_size)
         model = small.SmallNetwork(input_shape)
 
@@ -98,63 +113,60 @@ def train_ddp_worker(rank, world_size, config):
             use_ddp=True,
         )
 
+        if hasattr(trainer, "set_epoch_samplers"):
+            trainer.set_epoch_samplers(train_sampler, val_sampler)
+
         trainer.train(num_epochs=config["num_epochs"])
 
-        if rank == 0:
-            print("\nData loading info:")
-            print(processor.get_data_info())
-
+    except Exception as e:
+        print(f"Error in DDP worker {rank}: {e}")
+        raise e
     finally:
         cleanup_ddp()
 
 
-def train_multi_gpu_ddp_fast(config):
-    print("=== Multi-GPU DDP Training with Fast Data Loading ===")
+def train_multi_gpu_ddp_npz(config):
+    print("=== Multi-GPU DDP Training with NPZ Data Loading ===")
 
     world_size = torch.cuda.device_count()
     print(f"Using {world_size} GPUs for DDP training")
 
-    processor = FastGoDataProcessor(
-        processed_data_directory=config["processed_data_dir"]
-    )
+    processor = GoDataProcessor(data_directory=config["processed_data_dir"])
 
     try:
-        processor.load_preprocessed_data(
-            data_file=config.get("data_file", None),
-            metadata_file=config.get("metadata_file", None),
-        )
-        print("Preprocessed data found and validated")
-        print("Data info:", processor.get_data_info())
-    except FileNotFoundError as e:
+        stats = processor.get_data_stats()
+        print("NPZ data found and validated")
+        print(f"Data info: {stats}")
+    except Exception as e:
         print(f"Error: {e}")
-        print("Please ensure preprocessed data is available before training.")
-        return None, None
+        print("Please ensure NPZ processed data is available before training.")
+        return None
 
-    mp.spawn(train_ddp_worker, args=(world_size, config), nprocs=world_size, join=True)
+    mp.spawn(train_ddp_worker, args=(world_size, config),
+             nprocs=world_size, join=True)
 
 
-def train_single_gpu_fast(config):
-    print("=== Single GPU Training with Fast Data Loading ===")
+def train_single_gpu_npz(config):
+    print("=== Single GPU Training with NPZ Data Loading ===")
 
-    processor = FastGoDataProcessor(
-        processed_data_directory=config["processed_data_dir"]
-    )
+    processor = GoDataProcessor(data_directory=config["processed_data_dir"])
 
-    print("Loading preprocessed data...")
-    processor.load_preprocessed_data(
-        data_file=config.get("data_file", None),
-        metadata_file=config.get("metadata_file", None),
-    )
-
-    print("Data info:", processor.get_data_info())
+    stats = processor.get_data_stats()
+    print(f"Data info: {stats}")
 
     train_loader, val_loader = processor.create_train_val_loaders(
         train_ratio=config["train_ratio"],
+        val_ratio=config["val_ratio"],
+        test_ratio=config.get("test_ratio", 0.0),
         batch_size=config["batch_size"],
         shuffle_train=True,
         num_workers=config["num_workers"],
-        random_seed=42,
+        random_seed=config.get("random_seed", 42),
+        max_samples_per_game=config.get("max_samples_per_game", None),
     )
+
+    print(f"Train loader: {len(train_loader)} batches")
+    print(f"Val loader: {len(val_loader)} batches")
 
     board_size = 19
     encoder = OnePlaneEncoder(board_size)
@@ -179,81 +191,97 @@ def train_single_gpu_fast(config):
     return model, trainer
 
 
+def evaluate_model_npz(config):
+    print("Evaluating trained model...")
+
+    processor = GoDataProcessor(data_directory=config["processed_data_dir"])
+
+    processor.create_train_val_test_split(
+        train_ratio=config["train_ratio"],
+        val_ratio=config["val_ratio"],
+        test_ratio=config.get("test_ratio", 0.0),
+        random_seed=config.get("random_seed", 42),
+    )
+
+    val_loader = processor.create_dataloader(
+        data_type="val",
+        batch_size=config["batch_size"],
+        shuffle=False,
+        num_workers=config["num_workers"],
+        max_samples_per_game=config.get("max_samples_per_game", None),
+    )
+
+    board_size = 19
+    encoder = OnePlaneEncoder(board_size)
+    input_shape = (encoder.num_planes, board_size, board_size)
+    model = small.SmallNetwork(input_shape)
+
+    evaluator = GoEvaluator(model, val_loader, config["device"])
+
+    checkpoint_path = os.path.join(config["save_dir"], "best_checkpoint.pth")
+    if os.path.exists(checkpoint_path):
+        results = evaluator.evaluate(checkpoint_path=checkpoint_path)
+        print(f"Final evaluation results: {results}")
+        return results
+    else:
+        print("No checkpoint found for evaluation")
+        return None
+
+
 def main():
     config = {
+        # Data configuration
         "processed_data_dir": "processed_go_data",
-        "data_file": None,
-        "metadata_file": None,
-        "train_ratio": 0.9,
-        "batch_size": 128,
+        "train_ratio": 0.8,
+        "val_ratio": 0.2,
+        "test_ratio": 0.0,
+        # Set to limit samples per game (e.g., 200)
+        "max_samples_per_game": None,
+        "random_seed": 42,
+        # Training configuration
+        "batch_size": 1024,
         "learning_rate": 0.001,
         "weight_decay": 1e-4,
         "num_epochs": 50,
         "num_workers": 4,
+        # System configuration
         "save_dir": "checkpoints",
         "use_ddp": True,
     }
-
     if not torch.cuda.is_available():
         print("CUDA not available, using CPU")
         config["device"] = "cpu"
         config["use_ddp"] = False
         config["num_workers"] = 2
+        config["batch_size"] = 64  # Smaller batch size for CPU
     else:
         config["device"] = "cuda"
         print(f"CUDA available with {torch.cuda.device_count()} GPU(s)")
 
     os.makedirs(config["save_dir"], exist_ok=True)
 
+    try:
+        processor = GoDataProcessor(
+            data_directory=config["processed_data_dir"])
+        if not processor.verify_data_integrity(num_samples=5):
+            print("Data integrity check failed!")
+            return
+    except Exception as e:
+        print(f"Error validating NPZ data: {e}")
+        print("Please run preprocessing first to generate NPZ files.")
+        return
+
     if config["use_ddp"] and torch.cuda.device_count() > 1:
-        train_multi_gpu_ddp_fast(config)
+        train_multi_gpu_ddp_npz(config)
 
-        print("\nEvaluating trained model...")
+        evaluate_model_npz(config)
 
-        processor = FastGoDataProcessor(
-            processed_data_directory=config["processed_data_dir"]
-        )
-        processor.load_preprocessed_data(
-            data_file=config.get("data_file", None),
-            metadata_file=config.get("metadata_file", None),
-        )
-        processor.create_train_val_split(
-            train_ratio=config["train_ratio"],
-            random_seed=42,
-        )
-
-        val_loader = processor.create_dataloader(
-            data_type="val",
-            batch_size=config["batch_size"],
-            shuffle=False,
-            num_workers=config["num_workers"],
-        )
-
-        board_size = 19
-        encoder = OnePlaneEncoder(board_size)
-        input_shape = (encoder.num_planes, board_size, board_size)
-        model = small.SmallNetwork(input_shape)
-
-        evaluator = GoEvaluator(model, val_loader, config["device"])
-
-        checkpoint_path = os.path.join(config["save_dir"], "best_checkpoint.pth")
-        if os.path.exists(checkpoint_path):
-            results = evaluator.evaluate(checkpoint_path=checkpoint_path)
-            print(f"Final evaluation results: {results}")
-        else:
-            print("No checkpoint found for evaluation")
     else:
-        model, trainer = train_single_gpu_fast(config)
+        model, trainer = train_single_gpu_npz(config)
 
-        print("\nEvaluating trained model...")
-        val_loader = trainer.val_loader
-        evaluator = GoEvaluator(model, val_loader, config["device"])
-
-        checkpoint_path = os.path.join(config["save_dir"], "best_checkpoint.pth")
-        if os.path.exists(checkpoint_path):
-            results = evaluator.evaluate(checkpoint_path=checkpoint_path)
-            print(f"Final evaluation results: {results}")
+        evaluate_model_npz(config)
 
 
 if __name__ == "__main__":
     main()
+

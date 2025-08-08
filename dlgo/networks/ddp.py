@@ -8,8 +8,18 @@ def setup_ddp(rank, world_size):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12355"
 
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    torch.cuda.set_device(rank)
+    device = torch.device(f"cuda:{rank}")
+    torch.cuda.set_device(device)
+
+    torch.distributed.init_process_group(
+        backend="nccl",
+        world_size=world_size,
+        rank=rank,
+        init_method="env://",
+        device_id=device,
+    )
+
+    print(f"Rank {rank} initialized on {torch.cuda.current_device()}")
 
 
 def cleanup_ddp():

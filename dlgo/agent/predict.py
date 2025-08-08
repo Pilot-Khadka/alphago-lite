@@ -1,9 +1,6 @@
 import numpy as np
 
 from dlgo.agent.base import Agent
-from dlgo.agent.helpers import is_point_and_eye
-from dlgo import encoders
-from dlgo import goboard
 
 
 class DeepLearningAgent(Agent):

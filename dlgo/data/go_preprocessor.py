@@ -2,7 +2,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 import pickle
-import h5py
+import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 
@@ -34,159 +34,155 @@ class GoGamePreprocessor:
             moves, handicap_info = extract_moves(sgf_content)
 
             if handicap_info["is_handicap_game"]:
-                game, handicap_moves = setup_handicap_game(
-                    board_size, handicap_info)
+                game, handicap_moves = setup_handicap_game(board_size, handicap_info)
 
             num_moves = len(moves)
             if max_moves_per_game:
                 num_moves = min(num_moves, max_moves_per_game)
 
-            game_samples = []
+            if num_moves == 0:
+                return None
+
+            boards = []
+            move_labels = []
 
             for move_idx in range(num_moves):
-                # Get current board state
                 board_tensor = self.encoder.encode(game)
 
-                # Get the move to be made
                 color, (row, col) = moves[move_idx]
                 point = Point(row, col)
 
-                # Encode the move
                 move_index = self.encoder.encode_point(point)
                 label = np.zeros(self.encoder.num_points())
                 label[move_index] = 1
 
-                game_samples.append(
-                    {
-                        "board": board_tensor.astype(np.float32),
-                        "move": label.astype(np.float32),
-                        "game_idx": game_idx,
-                        "move_idx": move_idx,
-                    }
-                )
+                boards.append(board_tensor.astype(np.float32))
+                move_labels.append(label.astype(np.float32))
 
-                # Apply the move for next iteration
                 move_obj = Move.play(point)
                 game = game.apply_move(move_obj)
 
-            return game_samples
+            return {
+                "game_idx": game_idx,
+                "boards": np.array(boards),
+                "moves": np.array(move_labels),
+                "num_moves": num_moves,
+            }
 
         except Exception as e:
             print(f"Error processing game {game_idx}: {e}")
-            return []
+            return None
+
+    def _save_game_npz(self, game_data, game_counter):
+        """save a single game's data as NPZ file"""
+        if game_data is None:
+            return None
+
+        filename = f"game_{game_counter:08d}.npz"
+        filepath = os.path.join(self.output_dir, filename)
+
+        try:
+            np.savez_compressed(
+                filepath,
+                boards=game_data["boards"],
+                moves=game_data["moves"],
+                game_idx=game_data["game_idx"],
+                num_moves=game_data["num_moves"],
+            )
+            return {
+                "filename": filename,
+                "filepath": filepath,
+                "game_idx": game_data["game_idx"],
+                "num_moves": game_data["num_moves"],
+                "file_size": os.path.getsize(filepath),
+            }
+        except Exception as e:
+            print(f"Error saving game {game_data['game_idx']}: {e}")
+            return None
 
     def preprocess_games_parallel(
         self,
         max_moves_per_game=None,
         num_processes=None,
         batch_size=1000,
-        output_filename="processed_games.h5",
     ):
-        """Preprocess all games using multiprocessing with true memory-efficient batching"""
         if num_processes is None:
             num_processes = min(mp.cpu_count(), 8)
 
         print("Counting games...")
-        game_files = [f for f in os.listdir(
-            self.data_dir) if f.endswith(".txt")]
+        game_files = [f for f in os.listdir(self.data_dir) if f.endswith(".txt")]
 
-        # Initialize HDF5 file for incremental writing
-        output_path = os.path.join(self.output_dir, output_filename)
-        h5_file = None
-        datasets = {}
-        total_samples_written = 0
+        saved_games = []
+        total_samples = 0
+        game_counter = 0
 
-        try:
-            # Process each file separately to avoid loading all games into memory
-            for file_idx, file_name in enumerate(game_files):
-                file_path = os.path.join(self.data_dir, file_name)
-                print(
-                    f"""\nProcessing file {file_idx + 1}/{len(game_files)}: {
-                        file_name
-                    }"""
+        for file_idx, file_name in enumerate(game_files):
+            file_path = os.path.join(self.data_dir, file_name)
+            print(
+                f"""\nProcessing file {file_idx + 1}/{len(game_files)}: {file_name}"""
+            )
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            games = content.split("\n")
+            games = [game for game in games if game.strip()]
+            print(f"  Found {len(games):,} games in file")
+
+            for batch_start in range(0, len(games), batch_size):
+                batch_end = min(batch_start + batch_size, len(games))
+                game_batch = games[batch_start:batch_end]
+
+                print(f"""  Processing batch: games {batch_start}-{batch_end - 1}""")
+
+                batch_results = self._process_game_batch(
+                    game_batch, batch_start, max_moves_per_game, num_processes
                 )
 
-                # Read games from current file in batches
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                for game_data in batch_results:
+                    if game_data is not None:
+                        saved_info = self._save_game_npz(game_data, game_counter)
+                        if saved_info is not None:
+                            saved_games.append(saved_info)
+                            total_samples += game_data["num_moves"]
+                            game_counter += 1
 
-                games = content.split("\n")
-                games = [game for game in games if game.strip()]
-                print(f"  Found {len(games):,} games in file")
-
-                # Process games in batches
-                for batch_start in range(0, len(games), batch_size):
-                    batch_end = min(batch_start + batch_size, len(games))
-                    game_batch = games[batch_start:batch_end]
-
-                    print(
-                        f"""  Processing batch: games {
-                            batch_start}-{batch_end - 1}"""
-                    )
-
-                    # Process this batch
-                    batch_samples = self._process_game_batch(
-                        game_batch, batch_start, max_moves_per_game, num_processes
-                    )
-
-                    if batch_samples:
-                        # Initialize HDF5 file on first batch
-                        if h5_file is None:
-                            h5_file, datasets = self._initialize_hdf5_file(
-                                output_path, batch_samples[0]
-                            )
-
-                        # Write batch to HDF5 file
-                        self._write_batch_to_hdf5(
-                            datasets, batch_samples, total_samples_written
-                        )
-                        total_samples_written += len(batch_samples)
-
-                        print(
-                            f"""  Batch complete. Wrote {
-                                len(batch_samples):,} samples. Total: {
-                                total_samples_written:,}"""
-                        )
-
-                    # Clear batch from memory immediately
-                    del batch_samples
-                    del game_batch
-
-            # Update final dataset size and metadata
-            if h5_file is not None:
-                h5_file.attrs["num_samples"] = total_samples_written
                 print(
-                    f"""\nPreprocessing complete! Total samples: {
-                        total_samples_written:,}"""
+                    f"""  Batch complete. Processed {len(batch_results)} games. """
+                    f"""Total games saved: {game_counter}, Total samples: {
+                        total_samples:,}"""
                 )
 
-        finally:
-            # Always close the HDF5 file
-            if h5_file is not None:
-                h5_file.close()
+                del batch_results
+                del game_batch
 
-        return output_path if total_samples_written > 0 else None
+        metadata = self._save_metadata(saved_games, total_samples)
+
+        print(f"\nPreprocessing complete!")
+        print(f"Games saved: {len(saved_games):,}")
+        print(f"Total samples: {total_samples:,}")
+        print(f"""Average moves per game: {total_samples / len(saved_games):.1f}""")
+
+        return metadata
 
     def _process_game_batch(
         self, game_batch, batch_offset, max_moves_per_game, num_processes
     ):
-        """Process a single batch of games and return samples"""
-        # Prepare batch data for parallel processing
         batch_data = [
             (batch_offset + i, game, max_moves_per_game)
             for i, game in enumerate(game_batch)
         ]
 
-        batch_samples = []
+        batch_results = []
 
         with ProcessPoolExecutor(max_workers=num_processes) as executor:
-            # Submit batch for processing
+            # submit batch for processing
             future_to_game = {
                 executor.submit(self._process_single_game, data): data[0]
                 for data in batch_data
             }
 
-            # Collect results as they complete
+            # collect results as they complete
             for future in tqdm(
                 as_completed(future_to_game),
                 total=len(batch_data),
@@ -194,167 +190,200 @@ class GoGamePreprocessor:
             ):
                 game_idx = future_to_game[future]
                 try:
-                    game_samples = future.result()
-                    batch_samples.extend(game_samples)
+                    game_data = future.result()
+                    batch_results.append(game_data)
                 except Exception as e:
                     print(f"    Game {game_idx} failed: {e}")
+                    batch_results.append(None)
 
-        return batch_samples
+        return batch_results
 
-    def _initialize_hdf5_file(self, output_path, sample_data):
-        """Initialize HDF5 file with resizable datasets"""
-        print(f"Initializing HDF5 file: {output_path}")
-
-        h5_file = h5py.File(output_path, "w")
-
-        # Get shapes from sample
-        board_shape = sample_data["board"].shape
-        move_shape = sample_data["move"].shape
-
-        # Create resizable datasets (start with small size, expand as needed)
-        datasets = {
-            "boards": h5_file.create_dataset(
-                "boards",
-                shape=(0,) + board_shape,
-                maxshape=(None,) + board_shape,
-                dtype=np.float32,
-                compression="gzip",
-                compression_opts=6,
-                chunks=True,
-            ),
-            "moves": h5_file.create_dataset(
-                "moves",
-                shape=(0,) + move_shape,
-                maxshape=(None,) + move_shape,
-                dtype=np.float32,
-                compression="gzip",
-                compression_opts=6,
-                chunks=True,
-            ),
-            "game_indices": h5_file.create_dataset(
-                "game_indices",
-                shape=(0,),
-                maxshape=(None,),
-                dtype=np.int32,
-                chunks=True,
-            ),
-            "move_indices": h5_file.create_dataset(
-                "move_indices",
-                shape=(0,),
-                maxshape=(None,),
-                dtype=np.int32,
-                chunks=True,
-            ),
+    def _save_metadata(self, saved_games, total_samples):
+        metadata = {
+            "total_games": len(saved_games),
+            "total_samples": total_samples,
+            "encoder_name": self.encoder.__class__.__name__,
+            "board_shape": None,
+            "move_shape": None,
+            "games": saved_games,
         }
 
-        # Save metadata
-        h5_file.attrs["board_shape"] = board_shape
-        h5_file.attrs["move_shape"] = move_shape
-        h5_file.attrs["encoder_name"] = self.encoder.__class__.__name__
+        if saved_games:
+            first_game_path = saved_games[0]["filepath"]
+            try:
+                with np.load(first_game_path) as data:
+                    # remove batch dim
+                    metadata["board_shape"] = data["boards"].shape[1:]
+                    metadata["move_shape"] = data["moves"].shape[1:]
+            except Exception as e:
+                print(f"Warning: Could not read shapes from first game: {e}")
 
-        return h5_file, datasets
+        metadata_file = os.path.join(self.output_dir, "metadata.json")
+        with open(metadata_file, "w") as f:
+            # convert numpy types to regular Python types for JSON serialization
+            json_metadata = {
+                "total_games": int(metadata["total_games"]),
+                "total_samples": int(metadata["total_samples"]),
+                "encoder_name": metadata["encoder_name"],
+                "board_shape": [int(x) for x in metadata["board_shape"]]
+                if metadata["board_shape"] is not None
+                else None,
+                "move_shape": [int(x) for x in metadata["move_shape"]]
+                if metadata["move_shape"] is not None
+                else None,
+                "games": [
+                    {
+                        "filename": game["filename"],
+                        "game_idx": int(game["game_idx"]),
+                        "num_moves": int(game["num_moves"]),
+                        "file_size": int(game["file_size"]),
+                    }
+                    for game in metadata["games"]
+                ],
+            }
+            json.dump(json_metadata, f, indent=2)
 
-    def _write_batch_to_hdf5(self, datasets, batch_samples, start_index):
-        """Write a batch of samples to HDF5 datasets"""
-        if not batch_samples:
-            return
+        pickle_metadata_file = os.path.join(self.output_dir, "metadata.pkl")
+        with open(pickle_metadata_file, "wb") as f:
+            pickle.dump(metadata, f)
 
-        batch_size = len(batch_samples)
-        end_index = start_index + batch_size
-
-        # Resize datasets to accommodate new data
-        for dataset_name in datasets:
-            datasets[dataset_name].resize(
-                (end_index,) + datasets[dataset_name].shape[1:]
-            )
-
-        # Write batch data
-        for i, sample in enumerate(batch_samples):
-            idx = start_index + i
-            datasets["boards"][idx] = sample["board"]
-            datasets["moves"][idx] = sample["move"]
-            datasets["game_indices"][idx] = sample["game_idx"]
-            datasets["move_indices"][idx] = sample["move_idx"]
+        print(f"Metadata saved to: {metadata_file}")
+        return metadata
 
     def get_preprocessing_stats(self):
-        """Get statistics about processed data"""
         if not os.path.exists(self.output_dir):
             return {"status": "No processed data found"}
 
-        # Check for single file
-        single_files = [
-            f
-            for f in os.listdir(self.output_dir)
-            if f.endswith(".h5") and not f.startswith("processed_chunk_")
-        ]
+        metadata_file = os.path.join(self.output_dir, "metadata.json")
 
-        # Check for chunked files
-        metadata_file = os.path.join(self.output_dir, "chunk_metadata.pkl")
-
-        stats = {}
-
-        if single_files:
-            # Single file format
-            try:
-                filepath = os.path.join(self.output_dir, single_files[0])
-                with h5py.File(filepath, "r") as f:
-                    stats = {
-                        "format": "single",
-                        "file": single_files[0],
-                        "total_samples": f.attrs.get("num_samples", len(f["boards"])),
-                        "board_shape": f.attrs.get(
-                            "board_shape", f["boards"].shape[1:]
-                        ),
-                        "file_size_gb": os.path.getsize(filepath) / (1024**3),
-                    }
-            except Exception as e:
-                stats["error"] = f"Error reading single file: {e}"
-
-        elif os.path.exists(metadata_file):
-            # Chunked format
-            try:
-                with open(metadata_file, "rb") as f:
-                    metadata = pickle.load(f)
-
+        if not os.path.exists(metadata_file):
+            npz_files = [f for f in os.listdir(self.output_dir) if f.endswith(".npz")]
+            if npz_files:
                 total_size = sum(
-                    os.path.getsize(f)
-                    for f in metadata["chunk_files"]
-                    if os.path.exists(f)
+                    os.path.getsize(os.path.join(self.output_dir, f)) for f in npz_files
                 )
-
-                stats = {
-                    "format": "chunked",
-                    "total_samples": metadata["total_samples"],
-                    "num_chunks": metadata["num_chunks"],
-                    "chunk_size": metadata["chunk_size"],
+                return {
+                    "status": "Processed data found (no metadata)",
+                    "total_games": len(npz_files),
                     "total_size_gb": total_size / (1024**3),
+                    "format": "npz_files",
                 }
-            except Exception as e:
-                stats["error"] = f"Error reading chunk metadata: {e}"
-
-        else:
-            stats["status"] = "No processed data found"
-
-        return stats
-
-    def _save_intermediate_results(self, samples, games_processed):
-        """Save intermediate results to prevent data loss"""
-        filename = f"intermediate_results_{games_processed}_games.pkl"
-        filepath = os.path.join(self.output_dir, filename)
+            else:
+                return {"status": "No processed data found"}
 
         try:
-            with open(filepath, "wb") as f:
-                pickle.dump(samples, f)
-            print(
-                f"""    Saved intermediate results: {len(samples):,} samples to {
-                    filename
-                }"""
-            )
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
+
+            total_size = sum(game["file_size"] for game in metadata["games"])
+
+            return {
+                "status": "Complete",
+                "format": "npz_files",
+                "total_games": metadata["total_games"],
+                "total_samples": metadata["total_samples"],
+                "board_shape": metadata["board_shape"],
+                "move_shape": metadata["move_shape"],
+                "total_size_gb": total_size / (1024**3),
+                "avg_moves_per_game": metadata["total_samples"]
+                / metadata["total_games"]
+                if metadata["total_games"] > 0
+                else 0,
+                "encoder_name": metadata["encoder_name"],
+            }
+
         except Exception as e:
-            print(f"    Warning: Could not save intermediate results: {e}")
+            return {"error": f"Error reading metadata: {e}"}
+
+    def load_game_data(self, game_filename):
+        filepath = os.path.join(self.output_dir, game_filename)
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Game file not found: {filepath}")
+
+        try:
+            with np.load(filepath) as data:
+                return {
+                    "boards": data["boards"],
+                    "moves": data["moves"],
+                    "game_idx": int(data["game_idx"]),
+                    "num_moves": int(data["num_moves"]),
+                }
+        except Exception as e:
+            raise Exception(f"Error loading game file {game_filename}: {e}")
+
+    def load_random_games(self, num_games=10):
+        metadata_file = os.path.join(self.output_dir, "metadata.json")
+
+        if not os.path.exists(metadata_file):
+            raise FileNotFoundError("Metadata file not found. Run preprocessing first.")
+
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+
+        if len(metadata["games"]) < num_games:
+            num_games = len(metadata["games"])
+
+        import random
+
+        selected_games = random.sample(metadata["games"], num_games)
+
+        game_data = []
+        for game_info in selected_games:
+            try:
+                data = self.load_game_data(game_info["filename"])
+                game_data.append(data)
+            except Exception as e:
+                print(f"Warning: Could not load game {game_info['filename']}: {e}")
+
+        return game_data
+
+    def create_data_generator(self, batch_size=32, shuffle=True):
+        metadata_file = os.path.join(self.output_dir, "metadata.json")
+
+        if not os.path.exists(metadata_file):
+            raise FileNotFoundError("Metadata file not found. Run preprocessing first.")
+
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+
+        games = metadata["games"]
+
+        if shuffle:
+            import random
+
+            games = games.copy()
+            random.shuffle(games)
+
+        all_boards = []
+        all_moves = []
+
+        for game_info in games:
+            try:
+                game_data = self.load_game_data(game_info["filename"])
+                all_boards.append(game_data["boards"])
+                all_moves.append(game_data["moves"])
+            except Exception as e:
+                print(f"Warning: Skipping game {game_info['filename']}: {e}")
+                continue
+
+        if not all_boards:
+            raise Exception("No valid game data found")
+
+        all_boards = np.concatenate(all_boards, axis=0)
+        all_moves = np.concatenate(all_moves, axis=0)
+
+        if shuffle:
+            # shuffle  combined data
+            indices = np.random.permutation(len(all_boards))
+            all_boards = all_boards[indices]
+            all_moves = all_moves[indices]
+
+        for i in range(0, len(all_boards), batch_size):
+            end_idx = min(i + batch_size, len(all_boards))
+            yield all_boards[i:end_idx], all_moves[i:end_idx]
 
     def _count_total_games(self):
-        """Count total number of games without loading them into memory"""
         total_games = 0
         for file_name in os.listdir(self.data_dir):
             if file_name.endswith(".txt"):
@@ -365,276 +394,35 @@ class GoGamePreprocessor:
                 total_games += len(games)
         return total_games
 
-    def _read_games_from_file(self):
-        """Read all SGF games from text files (kept for backward compatibility)"""
-        print("Warning: _read_games_from_file loads all games into memory.")
-        print("Consider using preprocess_games_parallel with batching instead.")
-
-        all_games = []
-        for file_name in os.listdir(self.data_dir):
-            if file_name.endswith(".txt"):
-                file_path = os.path.join(self.data_dir, file_name)
-                print(f"Reading: {file_path}")
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-                games = content.split("\n")
-                games = [game for game in games if game.strip()]
-                all_games.extend(games)
-
-        print(f"Total games loaded: {len(all_games):,}")
-        return all_games
-
     def preprocess_and_save(
         self,
         max_moves_per_game=None,
-        save_format="single",
-        chunk_size=10000,
         num_processes=None,
         batch_size=1000,
-        output_filename="processed_games.h5",
     ):
-        """Complete preprocessing pipeline with true memory-efficient processing"""
-        # Get total game count for progress tracking
         total_games = self._count_total_games()
         print(f"Total games to process: {total_games:,}")
 
-        if save_format == "single":
-            # Direct streaming to single HDF5 file
-            result = self.preprocess_games_parallel(
-                max_moves_per_game=max_moves_per_game,
-                num_processes=num_processes,
-                batch_size=batch_size,
-                output_filename=output_filename,
-            )
-            return result
-
-        elif save_format == "chunks":
-            # Process in chunks and save separate files
-            return self.preprocess_and_save_chunks(
-                max_moves_per_game=max_moves_per_game,
-                num_processes=num_processes,
-                batch_size=batch_size,
-                chunk_size=chunk_size,
-            )
-        else:
-            raise ValueError("save_format must be 'single' or 'chunks'")
-
-    def preprocess_and_save_chunks(
-        self,
-        max_moves_per_game=None,
-        num_processes=None,
-        batch_size=1000,
-        chunk_size=10000,
-    ):
-        """Process and save data in chunks without loading everything into memory"""
-        if num_processes is None:
-            num_processes = min(mp.cpu_count(), 8)
-
-        game_files = [f for f in os.listdir(
-            self.data_dir) if f.endswith(".txt")]
-
-        chunk_files = []
-        current_chunk_samples = []
-        current_chunk_idx = 0
-        total_samples = 0
-
-        try:
-            # Process each file
-            for file_idx, file_name in enumerate(game_files):
-                file_path = os.path.join(self.data_dir, file_name)
-                print(
-                    f"""\nProcessing file {file_idx + 1}/{len(game_files)}: {
-                        file_name
-                    }"""
-                )
-
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-                games = content.split("\n")
-                games = [game for game in games if game.strip()]
-
-                # Process games in batches
-                for batch_start in range(0, len(games), batch_size):
-                    batch_end = min(batch_start + batch_size, len(games))
-                    game_batch = games[batch_start:batch_end]
-
-                    # Process this batch
-                    batch_samples = self._process_game_batch(
-                        game_batch, batch_start, max_moves_per_game, num_processes
-                    )
-
-                    # Add to current chunk
-                    current_chunk_samples.extend(batch_samples)
-                    total_samples += len(batch_samples)
-
-                    # Save chunk if it's full
-                    while len(current_chunk_samples) >= chunk_size:
-                        chunk_to_save = current_chunk_samples[:chunk_size]
-                        remaining_samples = current_chunk_samples[chunk_size:]
-
-                        chunk_file = self._save_single_chunk(
-                            chunk_to_save, current_chunk_idx
-                        )
-                        chunk_files.append(chunk_file)
-                        current_chunk_idx += 1
-
-                        current_chunk_samples = remaining_samples
-                        print(
-                            f"""  Saved chunk {current_chunk_idx}, total samples: {
-                                total_samples:,}"""
-                        )
-
-                    # Clear batch from memory
-                    del batch_samples
-                    del game_batch
-
-            # Save remaining samples as final chunk
-            if current_chunk_samples:
-                chunk_file = self._save_single_chunk(
-                    current_chunk_samples, current_chunk_idx
-                )
-                chunk_files.append(chunk_file)
-                print(f"  Saved final chunk {current_chunk_idx + 1}")
-
-            # Save chunk metadata
-            metadata_file = self._save_chunk_metadata(
-                chunk_files, total_samples, chunk_size
-            )
-
-            print(f"\nChunked preprocessing complete!")
-            print(f"Total samples: {total_samples:,}")
-            print(f"Number of chunks: {len(chunk_files)}")
-
-            return chunk_files, metadata_file
-
-        except Exception as e:
-            print(f"Error during chunked processing: {e}")
-            # Clean up partial chunks
-            for chunk_file in chunk_files:
-                try:
-                    os.remove(chunk_file)
-                except:
-                    pass
-            raise
-
-    def _save_single_chunk(self, chunk_samples, chunk_idx):
-        """Save a single chunk to HDF5 file"""
-        if not chunk_samples:
-            return None
-
-        filename = f"processed_chunk_{chunk_idx:04d}.h5"
-        filepath = os.path.join(self.output_dir, filename)
-
-        with h5py.File(filepath, "w") as f:
-            board_shape = chunk_samples[0]["board"].shape
-            move_shape = chunk_samples[0]["move"].shape
-
-            # Create datasets
-            boards = f.create_dataset(
-                "boards",
-                shape=(len(chunk_samples),) + board_shape,
-                dtype=np.float32,
-                compression="gzip",
-                compression_opts=6,
-            )
-
-            moves = f.create_dataset(
-                "moves",
-                shape=(len(chunk_samples),) + move_shape,
-                dtype=np.float32,
-                compression="gzip",
-                compression_opts=6,
-            )
-
-            game_indices = f.create_dataset(
-                "game_indices", shape=(len(chunk_samples),), dtype=np.int32
-            )
-
-            move_indices = f.create_dataset(
-                "move_indices", shape=(len(chunk_samples),), dtype=np.int32
-            )
-
-            # Fill datasets
-            for i, sample in enumerate(chunk_samples):
-                boards[i] = sample["board"]
-                moves[i] = sample["move"]
-                game_indices[i] = sample["game_idx"]
-                move_indices[i] = sample["move_idx"]
-
-            # Save metadata
-            f.attrs["num_samples"] = len(chunk_samples)
-            f.attrs["board_shape"] = board_shape
-            f.attrs["move_shape"] = move_shape
-            f.attrs["chunk_idx"] = chunk_idx
-            f.attrs["encoder_name"] = self.encoder.__class__.__name__
-
-        return filepath
-
-    def _save_chunk_metadata(self, chunk_files, total_samples, chunk_size):
-        """Save metadata for chunked format"""
-        metadata_file = os.path.join(self.output_dir, "chunk_metadata.pkl")
-        with open(metadata_file, "wb") as f:
-            pickle.dump(
-                {
-                    "chunk_files": chunk_files,
-                    "total_samples": total_samples,
-                    "chunk_size": chunk_size,
-                    "num_chunks": len(chunk_files),
-                },
-                f,
-            )
-        return metadata_file
-
-    def resume_from_intermediate(self, save_format="single", chunk_size=10000):
-        """Resume preprocessing from intermediate results if available"""
-        intermediate_files = [
-            f
-            for f in os.listdir(self.output_dir)
-            if f.startswith("intermediate_results_") and f.endswith(".pkl")
-        ]
-
-        if not intermediate_files:
-            print("No intermediate files found. Starting fresh preprocessing.")
-            return None
-
-        # Find the most recent intermediate file
-        latest_file = max(
-            intermediate_files,
-            key=lambda f: int(f.split("_")[2]) if f.split("_")[
-                2].isdigit() else 0,
+        result = self.preprocess_games_parallel(
+            max_moves_per_game=max_moves_per_game,
+            num_processes=num_processes,
+            batch_size=batch_size,
         )
+        return result
 
-        print(f"Found intermediate file: {latest_file}")
+    def cleanup_temp_files(self):
+        temp_patterns = ["intermediate_results_", "temp_", ".tmp"]
 
-        try:
-            filepath = os.path.join(self.output_dir, latest_file)
-            with open(filepath, "rb") as f:
-                samples = pickle.load(f)
-
-            print(f"Loaded {len(samples):,} samples from intermediate file")
-
-            # Save in specified format
-            if save_format == "single":
-                result = self.save_processed_data_hdf5(samples)
-            elif save_format == "chunks":
-                result = self.save_processed_data_chunks(samples, chunk_size)
-            else:
-                raise ValueError("save_format must be 'single' or 'chunks'")
-
-            # Clean up intermediate files after successful save
-            self._cleanup_intermediate_files()
-
-            return result
-
-        except Exception as e:
-            print(f"Error loading intermediate file: {e}")
-            return None
+        for filename in os.listdir(self.output_dir):
+            if any(pattern in filename for pattern in temp_patterns):
+                try:
+                    os.remove(os.path.join(self.output_dir, filename))
+                    print(f"Removed temp file: {filename}")
+                except Exception as e:
+                    print(f"Could not remove {filename}: {e}")
 
 
 def process_single_game_worker(game_data):
-    """Worker function for multiprocessing"""
     game_idx, sgf_content, max_moves_per_game, encoder = game_data
 
     try:
@@ -644,62 +432,59 @@ def process_single_game_worker(game_data):
         moves, handicap_info = extract_moves(sgf_content)
 
         if handicap_info["is_handicap_game"]:
-            game, handicap_moves = setup_handicap_game(
-                board_size, handicap_info)
+            game, handicap_moves = setup_handicap_game(board_size, handicap_info)
 
         num_moves = len(moves)
         if max_moves_per_game:
             num_moves = min(num_moves, max_moves_per_game)
 
-        game_samples = []
+        if num_moves == 0:
+            return None
+
+        boards = []
+        move_labels = []
 
         for move_idx in range(num_moves):
-            # Get current board state
             board_tensor = encoder.encode(game)
 
-            # Get the move to be made
             color, (row, col) = moves[move_idx]
             point = Point(row, col)
 
-            # Encode the move
             move_index = encoder.encode_point(point)
             label = np.zeros(encoder.num_points())
             label[move_index] = 1
 
-            game_samples.append(
-                {
-                    "board": board_tensor.astype(np.float32),
-                    "move": label.astype(np.float32),
-                    "game_idx": game_idx,
-                    "move_idx": move_idx,
-                }
-            )
+            boards.append(board_tensor.astype(np.float32))
+            move_labels.append(label.astype(np.float32))
 
-            # Apply the move for next iteration
             move_obj = Move.play(point)
             game = game.apply_move(move_obj)
 
-        return game_samples
+        return {
+            "game_idx": game_idx,
+            "boards": np.array(boards),
+            "moves": np.array(move_labels),
+            "num_moves": num_moves,
+        }
 
     except Exception as e:
         print(f"Error processing game {game_idx}: {e}")
-        return []
+        return None
 
 
 if __name__ == "__main__":
-    # Example usage
     from dlgo.encoders.base import get_encoder_by_name
 
     encoder = get_encoder_by_name("oneplane", 19)
     preprocessor = GoGamePreprocessor(encoder)
 
-    # Preprocess and save all games with memory-efficient processing
     result = preprocessor.preprocess_and_save(
-        max_moves_per_game=200,  # Limit moves per game if needed
-        save_format="single",  # or "chunks" for large datasets
-        num_processes=4,  # Adjust based on your CPU
-        batch_size=1000,  # Games to process in each batch
-        save_intermediate=True,  # Save progress to prevent data loss
+        max_moves_per_game=500,
+        num_processes=4,
+        batch_size=1000,
     )
 
-    print(f"Preprocessing complete! Data saved to: {result}")
+    print(f"Preprocessing complete! Metadata: {result}")
+
+    stats = preprocessor.get_preprocessing_stats()
+    print(f"Stats: {stats}")
