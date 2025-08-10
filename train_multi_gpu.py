@@ -62,8 +62,7 @@ def train_ddp_worker(rank, world_size, config):
         board_size = 19
         encoder = OnePlaneEncoder(board_size)
 
-        processor = GoDataProcessor(
-            data_directory=config["processed_data_dir"])
+        processor = GoDataProcessor(data_directory=config["processed_data_dir"])
 
         if rank == 0:
             print("Creating train/val split...")
@@ -86,8 +85,7 @@ def train_ddp_worker(rank, world_size, config):
             )
 
         train_loader, val_loader, train_sampler, val_sampler = (
-            create_distributed_dataset_and_loaders(
-                processor, config, rank, world_size)
+            create_distributed_dataset_and_loaders(processor, config, rank, world_size)
         )
 
         if rank == 0:
@@ -142,8 +140,7 @@ def train_multi_gpu_ddp_npz(config):
         print("Please ensure NPZ processed data is available before training.")
         return None
 
-    mp.spawn(train_ddp_worker, args=(world_size, config),
-             nprocs=world_size, join=True)
+    mp.spawn(train_ddp_worker, args=(world_size, config), nprocs=world_size, join=True)
 
 
 def train_single_gpu_npz(config):
@@ -242,7 +239,7 @@ def main():
         "batch_size": 1024,
         "learning_rate": 0.001,
         "weight_decay": 1e-4,
-        "num_epochs": 50,
+        "num_epochs": 5,
         "num_workers": 4,
         # System configuration
         "save_dir": "checkpoints",
@@ -261,8 +258,7 @@ def main():
     os.makedirs(config["save_dir"], exist_ok=True)
 
     try:
-        processor = GoDataProcessor(
-            data_directory=config["processed_data_dir"])
+        processor = GoDataProcessor(data_directory=config["processed_data_dir"])
         if not processor.verify_data_integrity(num_samples=5):
             print("Data integrity check failed!")
             return
@@ -284,4 +280,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

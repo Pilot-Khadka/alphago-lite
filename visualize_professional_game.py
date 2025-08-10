@@ -4,7 +4,6 @@ from PyQt6.QtWidgets import QApplication
 from dlgo import goboard
 from dlgo.goboard import Point, Move
 
-# from go_board_pyqt6 import GoBoardDisplay, print_move
 from dlgo.frontend.qt6 import GoBoardApplication
 from dlgo.data.process_files import (
     read_txt_files,
@@ -18,7 +17,7 @@ def main():
     app = QApplication(sys.argv)
 
     board_size = 19
-    folder = "dlgo/data/go_games"
+    folder = "go_data/go_games"
     game = goboard.GameState.new_game(board_size)
     games = read_txt_files(folder)
     moves, handicap_info = extract_moves(games[0])
