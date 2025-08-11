@@ -1,57 +1,12 @@
 import os
 import torch
 import torch.multiprocessing as mp
-from torch.utils.data.distributed import DistributedSampler
 
 from dlgo.encoders.oneplane import OnePlaneEncoder
-from dlgo.networks.ddp import setup_ddp, cleanup_ddp
+from dlgo.data.ddp import setup_ddp, cleanup_ddp, create_distributed_dataset_and_loaders
 from dlgo.networks.trainer import GoTrainer, GoEvaluator
 from dlgo.networks import small
 from dlgo.data.data_loader import GoDataProcessor
-
-
-def create_distributed_dataset_and_loaders(processor, config, rank, world_size):
-    train_dataset = processor.create_dataset(
-        data_type="train",
-        max_samples_per_game=config.get("max_samples_per_game", None),
-        shuffle_moves=True,  # Shuffle moves within games for training diversity
-    )
-
-    val_dataset = processor.create_dataset(
-        data_type="val",
-        max_samples_per_game=config.get("max_samples_per_game", None),
-        shuffle_moves=False,  # Don't shuffle validation data
-    )
-
-    train_sampler = DistributedSampler(
-        train_dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
-    )
-
-    val_sampler = DistributedSampler(
-        val_dataset, num_replicas=world_size, rank=rank, shuffle=False, drop_last=False
-    )
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=config["batch_size"] // world_size,
-        sampler=train_sampler,
-        num_workers=config["num_workers"],
-        pin_memory=True,
-        drop_last=True,
-        persistent_workers=True if config["num_workers"] > 0 else False,
-    )
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=config["batch_size"] // world_size,
-        sampler=val_sampler,
-        num_workers=config["num_workers"],
-        pin_memory=True,
-        drop_last=False,
-        persistent_workers=True if config["num_workers"] > 0 else False,
-    )
-
-    return train_loader, val_loader, train_sampler, val_sampler
 
 
 def train_ddp_worker(rank, world_size, config):
@@ -227,21 +182,17 @@ def evaluate_model_npz(config):
 
 def main():
     config = {
-        # Data configuration
         "processed_data_dir": "processed_go_data",
         "train_ratio": 0.8,
         "val_ratio": 0.2,
         "test_ratio": 0.0,
-        # Set to limit samples per game (e.g., 200)
         "max_samples_per_game": None,
         "random_seed": 42,
-        # Training configuration
         "batch_size": 1024,
         "learning_rate": 0.001,
         "weight_decay": 1e-4,
         "num_epochs": 5,
         "num_workers": 4,
-        # System configuration
         "save_dir": "checkpoints",
         "use_ddp": True,
     }
@@ -250,7 +201,7 @@ def main():
         config["device"] = "cpu"
         config["use_ddp"] = False
         config["num_workers"] = 2
-        config["batch_size"] = 64  # Smaller batch size for CPU
+        config["batch_size"] = 64
     else:
         config["device"] = "cuda"
         print(f"CUDA available with {torch.cuda.device_count()} GPU(s)")

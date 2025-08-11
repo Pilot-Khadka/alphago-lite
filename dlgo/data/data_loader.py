@@ -60,12 +60,12 @@ class GoGameNPZDataset(Dataset):
                 board = torch.from_numpy(data["boards"][move_idx]).float()
                 move = torch.from_numpy(data["moves"][move_idx]).float()
 
+                board = torch.from_numpy(data["boards"][move_idx]).float().to("cuda")
+                move = torch.from_numpy(data["moves"][move_idx]).float().to("cuda")
             return board, move
 
         except Exception as e:
             print(f"Error loading sample {idx} from {game_file}: {e}")
-            # Return zeros as fallback
-            # You might want to handle this differently
             return torch.zeros((1, 19, 19)), torch.zeros(361)
 
 
