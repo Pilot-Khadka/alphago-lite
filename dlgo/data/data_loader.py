@@ -60,8 +60,8 @@ class GoGameNPZDataset(Dataset):
                 board = torch.from_numpy(data["boards"][move_idx]).float()
                 move = torch.from_numpy(data["moves"][move_idx]).float()
 
-                board = torch.from_numpy(data["boards"][move_idx]).float().to("cuda")
-                move = torch.from_numpy(data["moves"][move_idx]).float().to("cuda")
+                board = torch.from_numpy(data["boards"][move_idx]).float()
+                move = torch.from_numpy(data["moves"][move_idx]).float()
             return board, move
 
         except Exception as e:
