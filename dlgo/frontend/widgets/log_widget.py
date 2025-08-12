@@ -1,5 +1,5 @@
 from datetime import datetime
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import QTextEdit
 
 
@@ -8,7 +8,6 @@ class LogWidget(QTextEdit):
         super().__init__()
         self.setReadOnly(True)
         self.setFont(QFont("Consolas", 9))
-        self.setMaximumHeight(200)
 
     def log_move(self, player: str, move: str, evaluation: float, time_taken: float):
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -23,3 +22,9 @@ class LogWidget(QTextEdit):
     def log_error(self, error: str):
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.append(f"[{timestamp}] ERROR: {error}")
+
+    def _scroll_to_bottom(self):
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.setTextCursor(cursor)
+        self.ensureCursorVisible()

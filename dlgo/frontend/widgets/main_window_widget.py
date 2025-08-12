@@ -1,6 +1,4 @@
-import time
 import queue
-import threading
 from typing import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -18,88 +16,22 @@ from PyQt6.QtCore import QTimer
 from dlgo.gotypes import Player
 from dlgo import gotypes, goboard
 from dlgo.goboard import Board, GameState
-from dlgo.configs.types import GameAnalysis, AIModelType, GameMode
+from dlgo.agent.naive import RandomBot
+from dlgo.configs.types import GameAnalysis, GameMode
+from dlgo.agent.human_player import HumanPlayer
+
 from dlgo.frontend.widgets.go_board_widget import GoBoardWidget
 from dlgo.frontend.widgets.analysis_widget import AnalysisWidget
 from dlgo.frontend.widgets.model_config_widget import ModelConfigWidget
 from dlgo.frontend.widgets.log_widget import LogWidget
 from dlgo.frontend.widgets.game_setup_dialogue_widget import GameSetupDialog
+from dlgo.frontend.widgets.statistics_dialog_widget import StatisticsDialog
+
 
 cols = "ABCDEFGHIJKLMNOPQRST"
 EMPTY = None
 BLACK = Player.black
 WHITE = Player.white
-
-
-class AIPlayer:
-    def __init__(
-        self, player_color: Player, model_type: AIModelType = None, name: str = ""
-    ):
-        self.player_color = player_color
-        self.model_type = model_type or AIModelType.MCTS_PURE
-        self.name = name or f"AI ({self.model_type.value})"
-
-        # AI-specific attributes
-        self.model = None
-        self.mcts_simulations = 1600
-        self.temperature = 1.0
-        self.analysis_callback = None
-
-        # Move computation
-        self.pending_move = None
-        self.computing = False
-        self.computation_thread = None
-
-    def start_analysis(self, position, callback):
-        """Start continuous analysis of position"""
-        self.analysis_callback = callback
-        # TODO: Implement continuous analysis
-
-    def get_move(self, game_state):
-        if self.pending_move:
-            move = self.pending_move
-            self.pending_move = None
-            self.computing = False
-            return move
-        elif not self.computing:
-            self._start_move_computation(game_state)
-        return None
-
-    def _start_move_computation(self, game_state):
-        """Start computing move in background thread"""
-        self.computing = True
-
-        # TODO: Implement actual AI move computation
-        # For now, simulate with timer
-        def simulate_computation():
-            time.sleep(1.0)  # Simulate computation time
-            # Generate dummy move (pass for now)
-            self.pending_move = goboard.Move.pass_turn()
-
-        self.computation_thread = threading.Thread(target=simulate_computation)
-        self.computation_thread.start()
-
-
-class HumanPlayer:
-    """Human player implementation"""
-
-    def __init__(self, player_color: Player, name: str = ""):
-        self.player_color = player_color
-        self.name = name or f"{player_color.name.title()} Player"
-        self.pending_move = None
-        self.move_ready = False
-
-    def get_move(self, game_state):
-        if self.move_ready and self.pending_move:
-            move = self.pending_move
-            self.pending_move = None
-            self.move_ready = False
-            return move
-        return None
-
-    def set_move(self, move):
-        self.pending_move = move
-        self.move_ready = True
 
 
 class GameController:
@@ -125,6 +57,9 @@ class GameController:
         self.update_timer.timeout.connect(self._process_updates)
         self.update_timer.start(50)  # 20 FPS updates
 
+        # pause status
+        self.is_paused = False
+
     def set_players(self, black_player, white_player):
         self.players = {Player.black: black_player, Player.white: white_player}
 
@@ -144,6 +79,9 @@ class GameController:
 
     def _process_updates(self):
         """Process queued updates and AI computations"""
+        if self.is_paused:
+            return
+
         if not hasattr(self, "players"):
             return
 
@@ -158,7 +96,7 @@ class GameController:
             current_color = self.game_state.next_player  # player enum
             current_player = self.players[current_color]
             if current_player:
-                move = current_player.get_move(self.game_state)
+                move = current_player.select_move(self.game_state)
                 if move:
                     self._apply_move(move)
 
@@ -166,8 +104,12 @@ class GameController:
         self.game_state = game_state
         self.current_player_color = BLACK
         self.game_over = False
+        self.is_paused = False
 
     def human_move_attempt(self, row: int, col: int) -> bool:
+        if self.is_paused:
+            return False
+
         if self.game_state.is_over():
             return False
 
@@ -202,6 +144,15 @@ class GameController:
     def add_game_over_callback(self, callback: Callable):
         self.game_over_callbacks.append(callback)
 
+    def pause_game(self):
+        self.is_paused = True
+
+    def resume_game(self):
+        self.is_paused = False
+
+    def toggle_pause(self):
+        self.is_paused = not self.is_paused
+
 
 class GoAIMainWindow(QMainWindow):
     def __init__(self, board_size=19):
@@ -214,7 +165,8 @@ class GoAIMainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._connect_signals()
-        self._apply_professional_styling()
+        self._apply_styling()
+        self.is_paused = False
 
     def _setup_ui(self):
         central_widget = QWidget()
@@ -277,6 +229,10 @@ class GoAIMainWindow(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
+        # pause button
+        self.pause_btn = QPushButton("Pause")
+        controls_layout.addWidget(self.pause_btn)
+
     def _setup_menu(self):
         menubar = self.menuBar()
 
@@ -303,15 +259,31 @@ class GoAIMainWindow(QMainWindow):
         tools_menu.addAction("Statistics", self.view_statistics)
 
     def _connect_signals(self):
-        # Connect game controller
+        # connect game controller
         self.game_controller.add_move_callback(self._on_move_made)
         self.game_controller.add_analysis_callback(self._on_analysis_update)
 
-        # Connect UI elements
+        # connect UI elements
         self.analyze_btn.clicked.connect(self.start_position_analysis)
 
-    def _apply_professional_styling(self):
-        """Apply professional dark theme styling"""
+        # connect pause butoon
+        self.pause_btn.clicked.connect(self.toggle_pause)
+
+    def set_paused(self, paused: bool):
+        self.is_paused = paused
+        self.game_controller.is_paused = paused
+        if paused:
+            self.pause_btn.setText("Resume")
+            self.log_widget.log_analysis("Game paused")
+        else:
+            self.pause_btn.setText("Pause")
+            self.log_widget.log_analysis("Game resumed")
+
+    def toggle_pause(self):
+        self.set_paused(not self.is_paused)
+
+    def _apply_styling(self):
+        """Apply  dark theme styling"""
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #2b2b2b;
@@ -417,23 +389,28 @@ class GoAIMainWindow(QMainWindow):
 
     def load_game(self):
         """Load a game from SGF file"""
-        self.log_widget.log_analysis("Load game functionality to be implemented")
+        self.log_widget.log_analysis(
+            "Load game functionality to be implemented")
 
     def save_game(self):
         """Save current game to SGF file"""
-        self.log_widget.log_analysis("Save game functionality to be implemented")
+        self.log_widget.log_analysis(
+            "Save game functionality to be implemented")
 
     def load_model(self):
         """Load AI model"""
-        self.log_widget.log_analysis("Model loading functionality to be implemented")
+        self.log_widget.log_analysis(
+            "Model loading functionality to be implemented")
 
     def compare_models(self):
         """Open model comparison interface"""
-        self.log_widget.log_analysis("Model comparison functionality to be implemented")
+        self.log_widget.log_analysis(
+            "Model comparison functionality to be implemented")
 
     def start_continuous_analysis(self):
         """Start continuous position analysis"""
-        self.game_controller.start_analysis_mode(self.game_controller.game_state)
+        self.game_controller.start_analysis_mode(
+            self.game_controller.game_state)
         self.log_widget.log_analysis("Started continuous analysis")
 
     def stop_analysis(self):
@@ -442,11 +419,13 @@ class GoAIMainWindow(QMainWindow):
 
     def open_position_editor(self):
         """Open position editor"""
-        self.log_widget.log_analysis("Position editor functionality to be implemented")
+        self.log_widget.log_analysis(
+            "Position editor functionality to be implemented")
 
     def open_sgf_viewer(self):
         """Open SGF viewer"""
-        self.log_widget.log_analysis("SGF viewer functionality to be implemented")
+        self.log_widget.log_analysis(
+            "SGF viewer functionality to be implemented")
 
     def view_statistics(self):
         """View game and model statistics"""
@@ -454,22 +433,28 @@ class GoAIMainWindow(QMainWindow):
         dialog.exec()
 
     def _start_new_game(self, settings):
+        self.board_widget.show_start_message = False
+        self.board_widget.update()
+
         mode = settings["mode"]
         board_size = settings["board_size"]
 
         # create players and reset game state
-        black_player, white_player = self._create_players_from_settings(settings)
+        black_player, white_player = self._create_players_from_settings(
+            settings)
         self.game_controller.set_players(black_player, white_player)
 
         # create new GameState
         new_game_state = GameState.new_game(board_size=board_size)
         self.game_controller.start_new_game(new_game_state)
+        self.set_paused(False)
 
         if hasattr(self.board_widget, "update_board"):
             self.board_widget.update_board(new_game_state)
 
         self.log_widget.log_analysis(
-            f"""Started new game: {mode.value} on {board_size}x{board_size} board"""
+            f"""Started new game: {mode.value} on {
+                board_size}x{board_size} board"""
         )
 
     def _create_players_from_settings(self, settings):
@@ -477,11 +462,11 @@ class GoAIMainWindow(QMainWindow):
         mode = settings["mode"]
 
         if mode == GameMode.HUMAN_VS_AI:
-            return HumanPlayer(BLACK, "Human"), AIPlayer(
+            return HumanPlayer(BLACK, "Human"), RandomBot(
                 WHITE, settings.get("ai_model")
             )
         elif mode == GameMode.AI_VS_AI:
-            return AIPlayer(BLACK, settings.get("black_ai_model")), AIPlayer(
+            return RandomBot(BLACK, settings.get("black_ai_model")), RandomBot(
                 WHITE, settings.get("white_ai_model")
             )
         else:

@@ -103,11 +103,18 @@ class GoDataProcessor:
         val_ratio: float = 0.15,
         test_ratio: float = 0.15,
         random_seed: int = 42,
+        total_games: Optional[int] = None,
     ):
         if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
             raise ValueError("Train, val, and test ratios must sum to 1.0")
 
         all_game_files = [game["filename"] for game in self.metadata["games"]]
+
+        # apply total_games limit if provided
+        if total_games is not None:
+            total_games = min(total_games, len(all_game_files))
+            all_game_files = all_game_files[:total_games]
+            print(f"Using a subset of {total_games:,} games for splitting.")
 
         random.seed(random_seed)
         shuffled_files = all_game_files.copy()
@@ -116,7 +123,6 @@ class GoDataProcessor:
         total_games = len(shuffled_files)
         train_size = int(total_games * train_ratio)
         val_size = int(total_games * val_ratio)
-        test_size = total_games - train_size - val_size
 
         self.train_games = shuffled_files[:train_size]
         self.val_games = shuffled_files[train_size : train_size + val_size]
@@ -162,7 +168,9 @@ class GoDataProcessor:
             game_files = [game["filename"] for game in self.metadata["games"]]
         else:
             raise ValueError(
-                f"Invalid data_type: {data_type}. Use 'train', 'val', 'test', or 'all'"
+                f"""Invalid data_type: {
+                    data_type
+                }. Use 'train', 'val', 'test', or 'all'"""
             )
 
         return GoGameNPZDataset(
@@ -214,6 +222,7 @@ class GoDataProcessor:
         random_seed: int = 42,
         max_samples_per_game: Optional[int] = None,
         pin_memory: bool = True,
+        total_games: Optional[int] = None,
     ) -> Tuple[DataLoader, DataLoader]:
         if self.train_games is None or self.val_games is None:
             self.create_train_val_test_split(
@@ -221,6 +230,7 @@ class GoDataProcessor:
                 val_ratio=val_ratio,
                 test_ratio=test_ratio,
                 random_seed=random_seed,
+                total_games=total_games,
             )
 
         train_loader = self.create_dataloader(

@@ -128,7 +128,28 @@ class GameSetupDialog(QDialog):
 
     def toggle_ai_group(self):
         mode = self.mode_combo.currentData()
+
+        # Show/hide AI group for HUMAN_VS_HUMAN
         self.ai_group.setVisible(mode != GameMode.HUMAN_VS_HUMAN)
+
+        # Helper to remove or add "Human" option
+        def update_combo(combo, show_human):
+            human_index = combo.findData("human")
+            if show_human:
+                if human_index == -1:
+                    combo.insertItem(0, "Human", "human")
+            else:
+                if human_index != -1:
+                    combo.removeItem(human_index)
+
+        if mode == GameMode.AI_VS_AI:
+            # Remove human option from both combos
+            update_combo(self.black_ai_combo, False)
+            update_combo(self.white_ai_combo, False)
+        else:
+            # Add human option if missing (for other modes)
+            update_combo(self.black_ai_combo, True)
+            update_combo(self.white_ai_combo, True)
 
     def get_settings(self):
         return {

@@ -3,7 +3,6 @@ from typing import Optional, Dict
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont
 from PyQt6.QtCore import QPoint, Qt
-
 from dlgo.gotypes import Player, Point
 
 cols = "ABCDEFGHIJKLMNOPQRST"
@@ -21,6 +20,7 @@ class GoBoardWidget(QWidget):
         self.show_coordinates = True
         self.show_move_numbers = True
         self.show_analysis_overlay = True
+        self.show_start_message = True
 
         canvas_size = (board_size - 1) * self.cell_size + 2 * self.margin
         self.setFixedSize(canvas_size, canvas_size)
@@ -84,6 +84,16 @@ class GoBoardWidget(QWidget):
 
         if self.last_move:
             self._draw_last_move_indicator(painter)
+
+        painter.end()
+        if self.show_start_message:
+            painter = QPainter(self)
+
+            # painter.setPen(QColor("white"))
+            painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+            painter.drawText(
+                self.rect(), Qt.AlignmentFlag.AlignCenter, "Select 'New Game' to begin"
+            )
 
     def _draw_coordinates(self, painter):
         painter.setPen(QPen(QColor("#8B4513"), 1))

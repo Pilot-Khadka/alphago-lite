@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 
 
 class AIModelType(Enum):
+    NAIVE = "Random"
     MCTS_PURE = "Pure MCTS"
     CNN_POLICY = "CNN Policy Network"
     VALUE_NETWORK = "Value Network"
@@ -32,4 +33,3 @@ class GameMode(Enum):
     HUMAN_VS_AI = "Human vs AI"
     AI_VS_AI = "AI vs AI"
     ANALYSIS_MODE = "Position Analysis"
-    TRAINING_MODE = "Training Mode"
