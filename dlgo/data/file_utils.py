@@ -1,5 +1,6 @@
 import re
 import os
+from dlgo.goboard import Move, Point, GameState
 
 """
 Each move is ;B[xy] or ;W[xy] where:
@@ -162,7 +163,7 @@ def get_standard_handicap_positions(board_size, handicap_count):
 
 
 def setup_handicap_game(board_size, handicap_info):
-    game = goboard.GameState.new_game(board_size)
+    game = GameState.new_game(board_size)
     handicap_moves = []
 
     if not handicap_info["is_handicap_game"]:

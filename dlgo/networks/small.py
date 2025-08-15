@@ -7,31 +7,19 @@ class SmallNetwork(nn.Module):
         channels, height, width = input_shape
 
         self.features = nn.Sequential(
-            nn.Conv2d(channels, 48, kernel_size=7, stride=1, padding=3, bias=False),
-            nn.BatchNorm2d(48),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(48, 32, kernel_size=5, stride=1, padding=2, bias=False),
+            nn.Conv2d(channels, 32, kernel_size=5, padding=2, bias=False),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 64, kernel_size=5, padding=2, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((8, 8)),
+            nn.AdaptiveAvgPool2d((4, 4)),
         )
-
-        self.feature_size = 32 * 8 * 8
 
         self.classifier = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Linear(self.feature_size, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(256, num_classes),
+            nn.Dropout(0.2),
+            nn.Linear(64 * 4 * 4, num_classes),
         )
-
         self._initialize_weights()
 
     def _initialize_weights(self):
