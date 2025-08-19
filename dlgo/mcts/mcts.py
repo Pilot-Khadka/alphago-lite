@@ -146,8 +146,7 @@ class MCTSBot(Agent):
 
         best_child = max(root.children.values(), key=lambda c: c.visits)
 
-        non_pass_children = [
-            c for c in root.children.values() if not c.move.is_pass]
+        non_pass_children = [c for c in root.children.values() if not c.move.is_pass]
         if non_pass_children:
             best_non_pass = max(non_pass_children, key=lambda c: c.visits)
             if (

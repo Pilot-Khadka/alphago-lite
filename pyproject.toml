@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Pilot-Khadka", email = "khdpilot@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.10.18"
 dependencies = [
     "h5py>=3.14.0",
     "pyqt6>=6.9.1",
@@ -30,3 +30,6 @@ dev = [
     "pytest>=8.4.1",
     "ruff>=0.12.7",
 ]
+[tool.ruff]
+select = ["Q", "E"]  # Enables quote and string normalization rules
+

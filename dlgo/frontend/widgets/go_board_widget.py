@@ -34,11 +34,13 @@ class GoBoardWidget(QWidget):
         self._init_board_state()
 
         self.game_controller: Optional["GameController"] = None
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             background-color: #E6B873;
             border: 2px solid #8B4513;
             border-radius: 5px;
-        """)
+        """
+        )
 
     def _setup_star_points(self):
         self.star_points = []
@@ -129,15 +131,13 @@ class GoBoardWidget(QWidget):
             # Vertical lines
             x = i * self.cell_size + self.margin
             painter.drawLine(
-                x, self.margin, x, (self.board_size - 1) *
-                self.cell_size + self.margin
+                x, self.margin, x, (self.board_size - 1) * self.cell_size + self.margin
             )
 
             # Horizontal lines
             y = i * self.cell_size + self.margin
             painter.drawLine(
-                self.margin, y, (self.board_size - 1) *
-                self.cell_size + self.margin, y
+                self.margin, y, (self.board_size - 1) * self.cell_size + self.margin, y
             )
 
     def _draw_star_points(self, painter):
@@ -225,8 +225,7 @@ class GoBoardWidget(QWidget):
                     painter.setBrush(QBrush(color))
                     painter.setPen(QPen(QColor("#000000"), 1))
                     radius = 8 + (3 if i < 3 else 0)  # Larger for top moves
-                    painter.drawEllipse(
-                        x - radius, y - radius, radius * 2, radius * 2)
+                    painter.drawEllipse(x - radius, y - radius, radius * 2, radius * 2)
 
                     # Draw evaluation text
                     painter.setPen(QPen(QColor("#000000")))
@@ -263,8 +262,7 @@ class GoBoardWidget(QWidget):
 
     def mousePressEvent(self, event):
         if self.game_controller and event.button() == Qt.MouseButton.LeftButton:
-            row, col = self.pixel_to_board(
-                event.position().x(), event.position().y())
+            row, col = self.pixel_to_board(event.position().x(), event.position().y())
             if row < 0 or col < 0 or row >= self.board_size or col >= self.board_size:
                 return
 

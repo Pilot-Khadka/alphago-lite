@@ -119,8 +119,7 @@ def extract_handicap_info(sgf_string):
 
         # handicap stones found, but not HA proprty, count is inferred
         if not handicap_info["is_handicap_game"] and handicap_info["handicap_stones"]:
-            handicap_info["handicap_count"] = len(
-                handicap_info["handicap_stones"])
+            handicap_info["handicap_count"] = len(handicap_info["handicap_stones"])
             handicap_info["is_handicap_game"] = True
 
     return handicap_info

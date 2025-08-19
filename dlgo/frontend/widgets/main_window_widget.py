@@ -284,7 +284,8 @@ class GoAIMainWindow(QMainWindow):
 
     def _apply_styling(self):
         """Apply  dark theme styling"""
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QMainWindow {
                 background-color: #2b2b2b;
                 color: #ffffff;
@@ -329,7 +330,8 @@ class GoAIMainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: #005a9e;
             }
-        """)
+        """
+        )
 
     def _on_move_made(self, player_color, move, game_state):
         """Handle move made callback"""
@@ -389,28 +391,23 @@ class GoAIMainWindow(QMainWindow):
 
     def load_game(self):
         """Load a game from SGF file"""
-        self.log_widget.log_analysis(
-            "Load game functionality to be implemented")
+        self.log_widget.log_analysis("Load game functionality to be implemented")
 
     def save_game(self):
         """Save current game to SGF file"""
-        self.log_widget.log_analysis(
-            "Save game functionality to be implemented")
+        self.log_widget.log_analysis("Save game functionality to be implemented")
 
     def load_model(self):
         """Load AI model"""
-        self.log_widget.log_analysis(
-            "Model loading functionality to be implemented")
+        self.log_widget.log_analysis("Model loading functionality to be implemented")
 
     def compare_models(self):
         """Open model comparison interface"""
-        self.log_widget.log_analysis(
-            "Model comparison functionality to be implemented")
+        self.log_widget.log_analysis("Model comparison functionality to be implemented")
 
     def start_continuous_analysis(self):
         """Start continuous position analysis"""
-        self.game_controller.start_analysis_mode(
-            self.game_controller.game_state)
+        self.game_controller.start_analysis_mode(self.game_controller.game_state)
         self.log_widget.log_analysis("Started continuous analysis")
 
     def stop_analysis(self):
@@ -419,13 +416,11 @@ class GoAIMainWindow(QMainWindow):
 
     def open_position_editor(self):
         """Open position editor"""
-        self.log_widget.log_analysis(
-            "Position editor functionality to be implemented")
+        self.log_widget.log_analysis("Position editor functionality to be implemented")
 
     def open_sgf_viewer(self):
         """Open SGF viewer"""
-        self.log_widget.log_analysis(
-            "SGF viewer functionality to be implemented")
+        self.log_widget.log_analysis("SGF viewer functionality to be implemented")
 
     def view_statistics(self):
         """View game and model statistics"""
@@ -440,8 +435,7 @@ class GoAIMainWindow(QMainWindow):
         board_size = settings["board_size"]
 
         # create players and reset game state
-        black_player, white_player = self._create_players_from_settings(
-            settings)
+        black_player, white_player = self._create_players_from_settings(settings)
         self.game_controller.set_players(black_player, white_player)
 
         # create new GameState

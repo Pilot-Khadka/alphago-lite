@@ -81,9 +81,7 @@ class GoGameShardDataset(Dataset):
 
         if shard_id not in self._shard_info:
             raise ValueError(
-                f"""Shard {shard_id} not found in metadata. Available shards: {
-                    list(self._shard_info.keys())
-                }"""
+                f"Shard {shard_id} not found in metadata. Available shards: {list(self._shard_info.keys())}"
             )
 
         shard_info = self._shard_info[shard_id]
@@ -131,9 +129,9 @@ class GoGameShardDataset(Dataset):
             expected_moves_len = boards_shape[0]
             if len(self.shard_moves[shard_id]) != expected_moves_len:
                 raise ValueError(
-                    f"Moves length mismatch: loaded {
+                    f"""Moves length mismatch: loaded {
                         len(self.shard_moves[shard_id])
-                    }, expected {expected_moves_len}"
+                    }, expected {expected_moves_len}"""
                 )
 
         except Exception as e:
@@ -141,13 +139,17 @@ class GoGameShardDataset(Dataset):
             print(f"  Boards file: {boards_file}")
             print(f"  Moves file: {moves_file}")
             print(f"  Expected boards shape: {shard_info['boards_shape']}")
-            print(f"  Expected moves shape: {shard_info.get('moves_shape', 'unknown')}")
+            print(
+                f"""  Expected moves shape: {
+                  shard_info.get('moves_shape', 'unknown')}"""
+            )
             raise
 
     def __getitem__(self, idx):
         if idx >= len(self.indices):
             raise IndexError(
-                f"Index {idx} out of range for dataset of size {len(self.indices)}"
+                f"""Index {idx} out of range for dataset of size {
+                    len(self.indices)}"""
             )
 
         global_idx = self.indices[idx]
@@ -155,38 +157,43 @@ class GoGameShardDataset(Dataset):
             self.global_to_offset
         ):
             raise IndexError(
-                f"Global index {global_idx} out of bounds. Max index: {
-                    min(len(self.global_to_shard), len(self.global_to_offset)) - 1
-                }"
+                f"""Global index {global_idx} out of bounds. Max index: {
+                    min(len(self.global_to_shard), len(
+                        self.global_to_offset)) - 1
+                }"""
             )
 
         try:
             shard_id = int(self.global_to_shard[global_idx])
             local_offset = int(self.global_to_offset[global_idx])
         except (IndexError, ValueError) as e:
-            raise IndexError(f"Error reading global index at {global_idx}: {e}")
+            raise IndexError(
+                f"""Error reading global index at {
+                             global_idx}: {e}"""
+            )
 
         if shard_id not in self._shard_info:
             available_shards = list(self._shard_info.keys())
             raise ValueError(
-                f"Invalid shard_id {shard_id} for global_idx {
+                f"""Invalid shard_id {shard_id} for global_idx {
                     global_idx
-                }. Available shards: {available_shards}"
+                }. Available shards: {available_shards}"""
             )
 
         try:
             self._load_shard(shard_id)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to load shard {shard_id} for global_idx {global_idx}: {e}"
+                f"""Failed to load shard {
+                    shard_id} for global_idx {global_idx}: {e}"""
             )
 
         shard_size = len(self.shard_boards[shard_id])
         if local_offset >= shard_size:
             raise IndexError(
-                f"Local offset {local_offset} out of bounds for shard {
+                f"""Local offset {local_offset} out of bounds for shard {
                     shard_id
-                } (size: {shard_size})"
+                } (size: {shard_size})"""
             )
 
         try:
@@ -194,7 +201,8 @@ class GoGameShardDataset(Dataset):
             move_idx = int(self.shard_moves[shard_id][local_offset])
         except (IndexError, ValueError) as e:
             raise RuntimeError(
-                f"Error reading data at shard {shard_id}, offset {local_offset}: {e}"
+                f"""Error reading data at shard {
+                    shard_id}, offset {local_offset}: {e}"""
             )
 
         if self.bitpack_boards and isinstance(board, dict):
@@ -247,8 +255,7 @@ class GoShardDataProcessor:
 
         if not os.path.exists(metadata_file):
             raise FileNotFoundError(
-                f"Shard metadata file not found: {metadata_file}. "
-                "Run shard preprocessing first."
+                f"""Shard metadata file not found: {metadata_file}.Run shard preprocessing first."""
             )
 
         with open(metadata_file, "r") as f:
@@ -618,4 +625,3 @@ if __name__ == "__main__":
         print(f"One-hot moves shape: {moves.shape}, dtype: {moves.dtype}")
         print(f"One-hot moves sum: {moves.sum(dim=1)[:5]}")
         break
-
