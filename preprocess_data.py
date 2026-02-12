@@ -1,5 +1,5 @@
-from dlgo.encoders.base import get_encoder_by_name
-from dlgo.data.preprocess_games import GoGamePreprocessor
+from alphago.encoders.base import get_encoder_by_name
+from alphago.data.preprocess_games import GoGamePreprocessor
 
 
 ENCODER_NAME = "oneplane"
@@ -11,10 +11,6 @@ NUM_WORKERS = 4
 
 
 def preprocess_data():
-    print("=" * 60)
-    print("STEP 1: PREPROCESSING RAW GAMES")
-    print("=" * 60)
-
     encoder = get_encoder_by_name(ENCODER_NAME, BOARD_SIZE)
 
     preprocessor = GoGamePreprocessor(
@@ -35,12 +31,7 @@ def preprocess_data():
 
 
 def main():
-    print("Go Game Fast Data Loading System")
-    print("=" * 60)
-    print("Running in PREPROCESSING mode...")
     preprocess_data()
-    print("\n" + "=" * 60)
-    print("PREPROCESSING COMPLETE!")
 
 
 if __name__ == "__main__":

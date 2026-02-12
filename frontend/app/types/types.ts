@@ -8,6 +8,7 @@ export interface GameState {
   board_size: number;
   board_state: Stone[][];
   current_player: "black" | "white";
+  gameMode: GameMode;
   status: GameStatus;
   is_over: boolean;
   move_history: any[];

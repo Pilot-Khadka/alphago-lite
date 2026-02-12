@@ -3,11 +3,11 @@ import torch
 import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
 
-from dlgo.data.data_loader import GoShardDataProcessor
-from dlgo.networks import small
-from dlgo.networks.trainer import GoTrainer, GoEvaluator
-from dlgo.data.ddp import setup_ddp, cleanup_ddp
-from dlgo.encoders.oneplane import OnePlaneEncoder
+from alphago.networks import small
+from alphago.data.ddp import setup_ddp, cleanup_ddp
+from alphago.encoders.oneplane import OnePlaneEncoder
+from alphago.data.data_loader import GoShardDataProcessor
+from alphago.networks.trainer import GoTrainer, GoEvaluator
 
 
 def create_distributed_dataset_and_loaders(processor, config, rank, world_size):
@@ -71,8 +71,7 @@ def train_ddp_worker(rank, world_size, config):
         board_size = 19
         encoder = OnePlaneEncoder(board_size)
 
-        processor = GoShardDataProcessor(
-            data_directory=config["processed_data_dir"])
+        processor = GoShardDataProcessor(data_directory=config["processed_data_dir"])
 
         # only rank 0 handles split and print info
         if rank == 0:
@@ -102,8 +101,7 @@ def train_ddp_worker(rank, world_size, config):
             )
 
         train_loader, val_loader, train_sampler, val_sampler = (
-            create_distributed_dataset_and_loaders(
-                processor, config, rank, world_size)
+            create_distributed_dataset_and_loaders(processor, config, rank, world_size)
         )
 
         input_shape = (encoder.num_planes, board_size, board_size)
@@ -138,8 +136,7 @@ def train_multi_gpu_ddp_shard(config):
     world_size = torch.cuda.device_count()
     print(f"Using {world_size} GPUs for DDP training")
 
-    processor = GoShardDataProcessor(
-        data_directory=config["processed_data_dir"])
+    processor = GoShardDataProcessor(data_directory=config["processed_data_dir"])
 
     try:
         stats = processor.get_data_stats()
@@ -149,8 +146,8 @@ def train_multi_gpu_ddp_shard(config):
         max_total = config.get("max_total_samples", None)
         if max_total:
             print(
-                f"Using subset of {max_total:,} samples out of {
-                    stats['total_positions']:,} total"
+                f"""Using subset of {max_total:,} samples out of {
+                    stats["total_positions"]:,} total"""
             )
         else:
             print(f"Using all {stats['total_positions']:,} samples")
@@ -160,13 +157,11 @@ def train_multi_gpu_ddp_shard(config):
         print("Please ensure shard processed data is available before training.")
         return None
 
-    mp.spawn(train_ddp_worker, args=(world_size, config),
-             nprocs=world_size, join=True)
+    mp.spawn(train_ddp_worker, args=(world_size, config), nprocs=world_size, join=True)
 
 
 def train_single_gpu_shard(config):
-    processor = GoShardDataProcessor(
-        data_directory=config["processed_data_dir"])
+    processor = GoShardDataProcessor(data_directory=config["processed_data_dir"])
 
     stats = processor.get_data_stats()
     print(f"Data info: {stats}")
@@ -176,8 +171,7 @@ def train_single_gpu_shard(config):
         val_ratio=config["val_ratio"],
         test_ratio=config.get("test_ratio", 0.0),
         random_seed=config.get("random_seed", 42),
-        max_total_samples=config.get(
-            "max_total_samples", None),  # Fixed parameter name
+        max_total_samples=config.get("max_total_samples", None),  # Fixed parameter name
     )
     print(f"Split info: {split_info}")
 
@@ -223,8 +217,7 @@ def train_single_gpu_shard(config):
 
 
 def evaluate_model_shard(config):
-    processor = GoShardDataProcessor(
-        data_directory=config["processed_data_dir"])
+    processor = GoShardDataProcessor(data_directory=config["processed_data_dir"])
 
     processor.create_train_val_test_split(
         train_ratio=config["train_ratio"],
@@ -296,8 +289,7 @@ def main():
     os.makedirs(config["save_dir"], exist_ok=True)
 
     try:
-        processor = GoShardDataProcessor(
-            data_directory=config["processed_data_dir"])
+        processor = GoShardDataProcessor(data_directory=config["processed_data_dir"])
 
         if not processor.verify_data_integrity(num_samples=100):
             print("Data integrity check failed!")
@@ -310,8 +302,8 @@ def main():
                 config["max_total_samples"] / stats["total_positions"]
             ) * 100
             print(
-                f"Will use {config['max_total_samples']:,} samples ({
-                    usage_percent:.1f}% of available data)"
+                f"""Will use {config["max_total_samples"]:,} samples ({
+                    usage_percent:.1f}% of available data)"""
             )
         else:
             print("Will use all available data")
@@ -322,8 +314,7 @@ def main():
         return
 
     if config["use_ddp"] and torch.cuda.device_count() > 1:
-        print(
-            f"\nStarting multi-GPU training on {torch.cuda.device_count()} GPUs...")
+        print(f"\nStarting multi-GPU training on {torch.cuda.device_count()} GPUs...")
         train_multi_gpu_ddp_shard(config)
         evaluate_model_shard(config)
     else:

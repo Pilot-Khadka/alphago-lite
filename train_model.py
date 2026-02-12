@@ -1,10 +1,10 @@
 import torch
 from torch.nn.parallel import DataParallel
 
-from dlgo.data.data_loader import GoDataProcessor
-from dlgo.encoders.oneplane import OnePlaneEncoder
-from dlgo.networks import small
-from dlgo.networks.trainer import GoTrainer
+from src.train import GoTrainer
+from src.networks import SmallNetwork
+from data.preprocess_games import GoDataProcessor
+from encoders.oneplane import OnePlaneEncoder
 
 BATCH_SIZE = 64
 NUM_WORKERS = 4
@@ -24,7 +24,7 @@ def train_single_gpu(config):
     )
 
     input_shape = (encoder.num_planes, board_size, board_size)
-    model = small.SmallNetwork(input_shape)
+    model = SmallNetwork(input_shape)
 
     if torch.cuda.device_count() > 1 and config["use_data_parallel"]:
         print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
@@ -52,7 +52,7 @@ def simple_single_gpu_example():
     print("=== Simple Single GPU Example ===")
 
     config = {
-        "data_dir": "dlgo/data/go_games/",
+        "data_dir": "alphago/data/go_games/",
         "train_games": 100,
         "val_games": 20,
         "batch_size": 32,

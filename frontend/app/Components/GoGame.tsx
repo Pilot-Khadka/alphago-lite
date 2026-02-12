@@ -1,4 +1,5 @@
 // GoGame.tsx
+// GoGame.tsx
 "use client"
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoBoard } from './GoBoard';
@@ -7,7 +8,9 @@ import { GameInfo } from './GameInfo';
 import { GameControls } from './GameControls';
 import { MoveHistory } from './MoveHistory';
 import { GameState, GameMode } from '../types/types';
+import { io, Socket } from "socket.io-client";
 
+// The URL of your Flask backend.
 const API_URL = 'http://127.0.0.1:5000/api';
 
 export const GoGame: React.FC<{ size: number }> = ({ size }) => {
@@ -17,40 +20,44 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
   const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isDark, setIsDark] = useState(true);
+  const socketRef = useRef<Socket | null>(null);
 
-  // Poll for game state updates, especially for bot-bot games
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (gameState && gameState.id && (gameMode === "bot-bot" || (gameMode === "human-bot" && gameState.current_player === "white")) && !isPaused && !gameState.is_over) {
-      interval = setInterval(() => {
-        fetchGameStatus();
-      }, 1000); // Poll every second
-    } else {
-      if (interval) {
-        clearInterval(interval);
-      }
+    // Only set up the connection once
+    if (!socketRef.current) {
+        socketRef.current = io('http://127.0.0.1:5000');
+        socketRef.current.on('connect', () => {
+            console.log('Connected to server via WebSocket');
+            // If we have a game ID, join the room immediately
+            if (gameState?.id) {
+                socketRef.current?.emit('join_game', { room: gameState.id });
+            }
+        });
+        socketRef.current.on('game_update', (data: { game: GameState }) => {
+            console.log('Game update received:', data.game);
+            setGameState(data.game);
+            setLoading(false);
+        });
+        socketRef.current.on('disconnect', () => {
+            console.log('Disconnected from server');
+        });
     }
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [gameState, gameMode, isPaused]);
 
-  const fetchGameStatus = useCallback(async () => {
-    if (!gameState?.id) return;
-    try {
-      const response = await fetch(`${API_URL}/games/${gameState.id}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch game state");
-      }
-      const data = await response.json();
-      setGameState(data.game);
-    } catch (err: any) {
-      setError(err.message || "An error occurred fetching game status.");
-      setLoading(false);
+    // Join the room whenever the gameState changes to a new game
+    if (gameState?.id && socketRef.current?.connected) {
+        console.log(`Attempting to join game room: ${gameState.id}`);
+        socketRef.current?.emit('join_game', { room: gameState.id });
     }
-  }, [gameState]);
+
+    return () => {
+        // Clean up the socket connection when the component unmounts
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+            socketRef.current = null;
+        }
+    };
+}, [gameState]);
+
 
   const startNewGame = useCallback(async (mode: GameMode) => {
     setLoading(true);
@@ -88,11 +95,9 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to make move");
       }
-      const data = await response.json();
-      setGameState(data.game);
+      // Do NOT set game state here. The WebSocket will handle the update.
     } catch (err: any) {
       setError(err.message || "An error occurred while making the move.");
-    } finally {
       setLoading(false);
     }
   }, [gameState]);
@@ -111,15 +116,13 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to pass turn");
       }
-      const data = await response.json();
-      setGameState(data.game);
+      // Do NOT set game state here. The WebSocket will handle the update.
     } catch (err: any) {
       setError(err.message || "An error occurred while passing the turn.");
-    } finally {
       setLoading(false);
     }
   }, [gameState]);
-  
+
   const handleTogglePause = useCallback(async () => {
     if (!gameState?.id) return;
     setLoading(true);
@@ -133,12 +136,9 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
       if (!response.ok) {
         throw new Error("Failed to pause/resume game");
       }
-      const data = await response.json();
-      setGameState(data.game);
-      setIsPaused(!isPaused);
+      // Do NOT set game state here. The WebSocket will handle the update.
     } catch (err: any) {
       setError(err.message || "An error occurred while pausing/resuming.");
-    } finally {
       setLoading(false);
     }
   }, [gameState, isPaused]);
@@ -155,11 +155,8 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
       if (!response.ok) {
         throw new Error("Failed to trigger analysis");
       }
-      const data = await response.json();
-      setGameState(data.game);
     } catch (err: any) {
       setError(err.message || "An error occurred during analysis.");
-    } finally {
       setLoading(false);
     }
   }, [gameState]);
@@ -183,6 +180,7 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
       setLoading(false);
     }
   }, [gameState]);
+
 
   return (
     <div className={`p-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
