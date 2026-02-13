@@ -1,0 +1,10 @@
+data_dir: dataset/
+train_games: 100
+val_games: 20
+batch_size: 32
+lr: 1e-3
+num_epochs: 40
+num_workers: 2
+max_moves_per_game: 300
+save_dir: checkpoint
+weight_decay: 1e-4

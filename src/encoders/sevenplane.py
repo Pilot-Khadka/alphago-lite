@@ -1,8 +1,8 @@
 import numpy as np
 
 
-from alphago.encoders.base import Encoder
-from alphago.goboard import Move, Point
+from ..encoders.base import Encoder
+from ..goboard import Move, Point
 
 
 class SevenPlaneEncoder(Encoder):

@@ -1,3 +1,5 @@
+from typing import List
+
 import re
 import os
 from ..goboard import Move, Point, GameState
@@ -35,7 +37,8 @@ def extract_moves(sgf_string):
     return moves, handicap_info
 
 
-def read_txt_files(folder_path):
+def read_txt_files(folder_path) -> List:
+    games = None
     for file_name in os.listdir(folder_path):
         if file_name.endswith(".txt"):
             file_path = os.path.join(folder_path, file_name)

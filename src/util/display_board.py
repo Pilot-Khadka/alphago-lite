@@ -1,4 +1,5 @@
 import tkinter as tk
+
 from dlgo import gotypes
 from dlgo.gotypes import Player
 

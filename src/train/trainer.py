@@ -20,9 +20,9 @@ class GoTrainer:
         model,
         train_loader,
         val_loader,
-        device="cuda",
+        device: torch.device,
         learning_rate=0.001,
-        weight_decay=1e-4,
+        weight_decay: float = 1e-4,
         save_dir="checkpoints",
         rank=0,
         world_size=1,
@@ -34,13 +34,11 @@ class GoTrainer:
         self.device = device
         self.save_dir = save_dir
 
-        # only create on rank 0 to avoid race condition
         if rank == 0:
             os.makedirs(save_dir, exist_ok=True)
 
         self.model = model.to(device)
 
-        # wrap model with ddp if distributed_training
         if use_ddp and world_size > 1:
             self.model = DDP(self.model, device_ids=[rank])
             self.model_without_ddp = self.model.module
@@ -51,7 +49,9 @@ class GoTrainer:
         self.val_loader = val_loader
 
         self.optimizer = optim.Adam(
-            model.parameters(), lr=learning_rate, weight_decay=weight_decay
+            model.parameters(),
+            lr=float(learning_rate),
+            weight_decay=float(weight_decay),
         )
         self.criterion = nn.CrossEntropyLoss()
 
@@ -80,7 +80,7 @@ class GoTrainer:
 
     def train_epoch(self, epoch):
         self.model.train()
-        # set epoch for distributed sampler
+
         if hasattr(self.train_loader.sampler, "set_epoch"):
             self.train_loader.sampler.set_epoch(epoch)
 
@@ -88,7 +88,6 @@ class GoTrainer:
         correct = 0
         total = 0
 
-        # only show progress bar on rank 0
         if self.rank == 0:
             pbar = tqdm(self.train_loader, desc=f"Epoch {epoch + 1} [Train]")
         else:
@@ -113,7 +112,6 @@ class GoTrainer:
             total += target.size(0)
             correct += (predicted == target).sum().item()
 
-            # update progress bar only on rank 0
             if self.rank == 0 and hasattr(pbar, "set_postfix"):
                 pbar.set_postfix(
                     {
@@ -122,7 +120,6 @@ class GoTrainer:
                     }
                 )
 
-            # log to tensorboard only on rank 0
             if self.rank == 0 and self.writer and batch_idx % 100 == 0:
                 self.writer.add_scalar(
                     "Loss/Train_Batch",
@@ -200,7 +197,6 @@ class GoTrainer:
         return avg_loss, accuracy
 
     def save_checkpoint(self, epoch, val_accuracy, is_best=False):
-        # only save on rank 0
         if self.rank != 0:
             return
 

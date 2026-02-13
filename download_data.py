@@ -1,30 +1,25 @@
 import sys
+import yaml
 import subprocess
-
 from pathlib import Path
 
-import yaml
 
+def load_config(config_path: Path) -> dict:
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
 
-CONFIG_PATH = Path(__file__).parent / "config/data.yaml"
-EXTERNAL_DIR = Path(__file__).parent / "external"
-
-
-def load_config() -> dict:
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(f"Config file not found: {CONFIG_PATH}")
-    with CONFIG_PATH.open() as f:
+    with config_path.open() as f:
         return yaml.safe_load(f)
 
 
-def dataset_exists(name: str) -> bool:
-    target = EXTERNAL_DIR / name
+def dataset_exists(name: Path) -> bool:
+    target = external_dir / name
     return target.exists() and any(target.iterdir())
 
 
 def clone_dataset(name: str, url: str) -> None:
-    EXTERNAL_DIR.mkdir(parents=True, exist_ok=True)
-    target = EXTERNAL_DIR / name
+    external_dir.mkdir(parents=True, exist_ok=True)
+    target = external_dir / name
     print(f"Cloning {name} from {url} ...")
     result = subprocess.run(
         ["git", "clone", url, str(target)],
