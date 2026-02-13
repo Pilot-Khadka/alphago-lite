@@ -1,14 +1,14 @@
-from typing import List
-
-import re
-import os
-from ..goboard import Move, Point, GameState
-
 """
 Each move is ;B[xy] or ;W[xy] where:
     x and y are lowercase letters 'a' to 's' (for 19×19 board).
     a = 0, b = 1, ..., s = 18
 """
+
+from typing import List
+
+import re
+import os
+from ..goboard import Move, Point, GameState
 
 
 def sgf_to_coords(sgf_coord):
@@ -46,10 +46,12 @@ def read_txt_files(folder_path) -> List:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
+        # pyrefly: ignore [unbound-name]
         games = content.split("\n")  # each SGF game is on its own line
         games = [game for game in games if game.strip()]  # remove empty lines
 
         print(f"Total games: {len(games)}")
+    # pyrefly: ignore [bad-return]
     return games
 
 

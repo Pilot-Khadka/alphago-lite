@@ -10,6 +10,7 @@ class SevenPlaneEncoder(Encoder):
         self.board_size = board_size
         self.num_planes = 7
 
+    # pyrefly: ignore [bad-override]
     def name(self):
         return "sevenplane"
 
@@ -28,13 +29,16 @@ class SevenPlaneEncoder(Encoder):
                         board_tensor[6][row][col] = 1
 
                     else:
+                        # pyrefly: ignore [missing-attribute]
                         liberty_plane = min(3, go_string.num_liberties) - 1
+                        # pyrefly: ignore [missing-attribute]
                         liberty_plane += base_plane[go_string.color]
         return board_tensor
 
     def encode_point(self, point):
         return self.board_size * (point.row - 1) + (point.col - 1)
 
+    # pyrefly: ignore [bad-override]
     def decode_point_index(self, index):
         row = index // self.board_size
         col = index % self.board_size
@@ -43,6 +47,7 @@ class SevenPlaneEncoder(Encoder):
     def num_points(self):
         return self.board_size * self.board_size
 
+    # pyrefly: ignore [bad-override]
     def shape(self):
         return (self.num_planes, self.board_size, self.board_size)
 

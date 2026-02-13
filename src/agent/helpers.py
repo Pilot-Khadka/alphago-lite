@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from alphago.gotypes import Point
 
 

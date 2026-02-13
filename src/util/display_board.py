@@ -1,6 +1,8 @@
 import tkinter as tk
 
+# pyrefly: ignore [missing-import]
 from dlgo import gotypes
+# pyrefly: ignore [missing-import]
 from dlgo.gotypes import Player
 
 cols = "ABCDEFGHIJKLMNOPQRST"
@@ -77,10 +79,12 @@ class GoBoardDisplay:
 
     def on_click(self, event):
         """Handle mouse click on the board"""
+        # pyrefly: ignore [missing-attribute]
         if self.click_callback:
             row, col = self.pixel_to_board(event.x, event.y)
             # Convert to 1-based indexing for game logic
             if 0 <= row < self.board_size and 0 <= col < self.board_size:
+                # pyrefly: ignore [not-callable]
                 self.click_callback(row + 1, col + 1)
 
     def draw_board(self):

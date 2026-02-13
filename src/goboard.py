@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import src.zobrist as zobrist
 from .gotypes import Player, Point
 
@@ -99,6 +100,7 @@ class Board:
                 liberties.append(neighbor)
             else:
                 neighbor_group = self._grid.get(neighbor)
+                # pyrefly: ignore [missing-attribute]
                 if neighbor_group.color == player:
                     same_color_strigs.append(neighbor_group)
                 else:
@@ -120,6 +122,7 @@ class Board:
         # reduce liberties of opposite color group,
         # remove if captured
         for string in opposite_color_strings:
+            # pyrefly: ignore [missing-attribute]
             replacement = string.without_liberty(point)
             if replacement.num_liberties:
                 self._replace_string(replacement)
@@ -287,6 +290,7 @@ class GameState:
         next_board = self._copy_board()
         next_board.place_stone(player, move.point)
         new_string = next_board.get_go_string(move.point)
+        # pyrefly: ignore [missing-attribute]
         return new_string.num_liberties == 0
 
     @property

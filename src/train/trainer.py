@@ -3,6 +3,7 @@ import time
 import json
 import numpy as np
 from tqdm import tqdm
+from pathlib import Path
 from datetime import datetime
 
 
@@ -23,7 +24,7 @@ class GoTrainer:
         device: torch.device,
         learning_rate=0.001,
         weight_decay: float = 1e-4,
-        save_dir="checkpoints",
+        save_dir: Path = Path("checkpoint"),
         rank=0,
         world_size=1,
         use_ddp=False,

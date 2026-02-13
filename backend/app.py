@@ -12,10 +12,15 @@ import eventlet
 from enum import Enum
 
 
+# pyrefly: ignore [missing-import]
 from alphago.gotypes import Player, Point
+# pyrefly: ignore [missing-import]
 from alphago.goboard import GameState, Move
+# pyrefly: ignore [missing-import]
 from alphago.agent.naive import RandomBot
+# pyrefly: ignore [missing-import]
 from alphago.agent.human_player import HumanPlayer
+# pyrefly: ignore [missing-import]
 from alphago.configs.types import GameAnalysis, AIModelType
 
 # Use eventlet for async support with SocketIO
@@ -67,6 +72,7 @@ class GameSession:
                 elif stone == Player.white:
                     board_row.append("white")
                 else:
+                    # pyrefly: ignore [bad-argument-type]
                     board_row.append(None)
             board_state.append(board_row)
 
@@ -220,6 +226,7 @@ def make_move(game_id: str):
         move_data = MoveData(
             player="black" if current_player_before == Player.black else "white",
             move_type=move_type,
+            # pyrefly: ignore [unbound-name]
             position={"row": row, "col": col} if move_type == "play" else None,
             timestamp=time.time(),
         )

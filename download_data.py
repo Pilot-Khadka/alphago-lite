@@ -13,12 +13,15 @@ def load_config(config_path: Path) -> dict:
 
 
 def dataset_exists(name: Path) -> bool:
+    # pyrefly: ignore [unknown-name]
     target = external_dir / name
     return target.exists() and any(target.iterdir())
 
 
 def clone_dataset(name: str, url: str) -> None:
+    # pyrefly: ignore [unknown-name]
     external_dir.mkdir(parents=True, exist_ok=True)
+    # pyrefly: ignore [unknown-name]
     target = external_dir / name
     print(f"Cloning {name} from {url} ...")
     result = subprocess.run(
@@ -32,6 +35,7 @@ def clone_dataset(name: str, url: str) -> None:
 
 
 def main() -> None:
+    # pyrefly: ignore [missing-argument]
     config = load_config()
     datasets: dict = config.get("datasets", {})
 

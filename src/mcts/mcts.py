@@ -2,8 +2,11 @@ import random
 import time
 import math
 
+# pyrefly: ignore [missing-import]
 from alphago.goboard import Move
+# pyrefly: ignore [missing-import]
 from alphago.gotypes import Point
+# pyrefly: ignore [missing-import]
 from alphago.agent.base import Agent
 
 

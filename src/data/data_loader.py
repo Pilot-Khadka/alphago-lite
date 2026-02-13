@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 
 
 class GoDataset(Dataset):
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, max_samples: int | None = None):
         board_files = sorted(glob.glob(os.path.join(data_dir, "*boards.npy")))
         move_files = sorted(glob.glob(os.path.join(data_dir, "*moves.npy")))
 
@@ -22,15 +22,25 @@ class GoDataset(Dataset):
 
         lengths = [len(m) for m in self._moves]
         self._offsets = np.cumsum([0] + lengths)
-        self._total = int(self._offsets[-1])
+        self._full_total = int(self._offsets[-1])
+
+        if max_samples is not None:
+            self._total = min(max_samples, self._full_total)
+        else:
+            self._total = self._full_total
 
     def __len__(self) -> int:
         return self._total
 
-    def __getitem__(self, idx: int):
-        shard = int(np.searchsorted(self._offsets, idx, side="right")) - 1
-        local_idx = idx - int(self._offsets[shard])
+    def __getitem__(self, index: int):
+        if index >= self._total:
+            raise IndexError(
+                f"Index {index} out of range for dataset of size {self._total}"
+            )
 
-        board = torch.from_numpy(self._boards[shard][local_idx].astype(np.float32))
-        move = torch.tensor(int(self._moves[shard][local_idx]), dtype=torch.long)
+        shard = int(np.searchsorted(self._offsets, index, side="right")) - 1
+        local_index = index - int(self._offsets[shard])
+
+        board = torch.from_numpy(self._boards[shard][local_index].astype(np.float32))
+        move = torch.tensor(int(self._moves[shard][local_index]), dtype=torch.long)
         return board, move

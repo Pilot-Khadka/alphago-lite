@@ -1,4 +1,6 @@
+# pyrefly: ignore [missing-import]
 from alphago.agent.base import Agent
+# pyrefly: ignore [missing-import]
 from alphago.gotypes import Player
 
 

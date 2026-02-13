@@ -63,7 +63,9 @@ class GoGamePreprocessor:
                 if result is None:
                     continue
 
+                # pyrefly: ignore [bad-argument-type]
                 boards_buf.extend(result["boards"])
+                # pyrefly: ignore [bad-argument-type]
                 moves_buf.append(result["moves"])
 
                 if len(boards_buf) >= shard_size:
@@ -127,6 +129,7 @@ class GoGamePreprocessor:
                     )
                     return None
 
+                # pyrefly: ignore [not-iterable]
                 color, (row, col) = moves[move_idx]
                 point = Point(row, col)
 

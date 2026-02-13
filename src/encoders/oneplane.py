@@ -17,6 +17,7 @@ class OnePlaneEncoder(Encoder):
         self.board_size = board_size
         self.num_planes = 1
 
+    # pyrefly: ignore [bad-override]
     def name(self):
         return "oneplane"
 
@@ -39,6 +40,7 @@ class OnePlaneEncoder(Encoder):
     def encode_point(self, point):
         return self.board_size * (point.row - 1) + (point.col - 1)
 
+    # pyrefly: ignore [bad-override]
     def decode_point_index(self, index):
         row = index // self.board_size
         col = index % self.board_size
@@ -47,5 +49,6 @@ class OnePlaneEncoder(Encoder):
     def num_points(self):
         return self.board_size * self.board_size
 
+    # pyrefly: ignore [bad-override]
     def shape(self):
         return (self.num_planes, self.board_size, self.board_size)

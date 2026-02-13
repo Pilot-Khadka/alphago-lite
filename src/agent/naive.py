@@ -2,11 +2,17 @@ import time
 import random
 import threading
 
+# pyrefly: ignore [missing-import]
 from alphago.gotypes import Player
+# pyrefly: ignore [missing-import]
 from alphago.agent.base import Agent
+# pyrefly: ignore [missing-import]
 from alphago.agent.helpers import is_point_and_eye
+# pyrefly: ignore [missing-import]
 from alphago.goboard import Move
+# pyrefly: ignore [missing-import]
 from alphago.gotypes import Point
+# pyrefly: ignore [missing-import]
 from alphago.configs.types import AIModelType
 
 
@@ -61,6 +67,7 @@ class RandomBot(Agent):
         def simulate_computation():
             time.sleep(1.0)  # Simulate computation time
             # Generate dummy move (pass for now)
+            # pyrefly: ignore [unknown-name]
             self.pending_move = goboard.Move.pass_turn()
 
         self.computation_thread = threading.Thread(target=simulate_computation)

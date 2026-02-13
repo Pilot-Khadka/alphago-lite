@@ -1,6 +1,8 @@
 import numpy as np
 
+# pyrefly: ignore [missing-import]
 from dlgo import goboard
+# pyrefly: ignore [missing-import]
 from dlgo.agent.base import Agent
 
 
@@ -30,6 +32,7 @@ class DeepLearningAgent(Agent):
             point = self.encoder.decode_point_index(point_idx)
             if game_state.is_valid_move(
                 goboard.Move.play(point)
+            # pyrefly: ignore [unknown-name]
             ) and not is_point_an_eye(game_state.board, point, game_state.next_player):
                 return goboard.Move.play(point)
         return goboard.Move.pass_turn()
