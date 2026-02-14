@@ -12,15 +12,10 @@ import eventlet
 from enum import Enum
 
 
-# pyrefly: ignore [missing-import]
 from alphago.gotypes import Player, Point
-# pyrefly: ignore [missing-import]
 from alphago.goboard import GameState, Move
-# pyrefly: ignore [missing-import]
 from alphago.agent.naive import RandomBot
-# pyrefly: ignore [missing-import]
 from alphago.agent.human_player import HumanPlayer
-# pyrefly: ignore [missing-import]
 from alphago.configs.types import GameAnalysis, AIModelType
 
 # Use eventlet for async support with SocketIO
@@ -59,27 +54,38 @@ class GameSession:
     move_history: list
     current_analysis: Optional[GameAnalysis] = None
     last_modified: float = 0.0
+    _cached_dict: Optional[Dict] = None
+    _cache_version: int = 0
 
-    def to_dict(self):
+    def _invalidate_cache(self):
+        self._cached_dict = None
+        self._cache_version += 1
+
+    def _serialize_board_state(self):
         board_state = []
         for row in range(1, self.board_size + 1):
             board_row = []
             for col in range(1, self.board_size + 1):
                 point = Point(row=row, col=col)
                 stone = self.game_state.board.get(point)
-                if stone == Player.black:
-                    board_row.append("black")
-                elif stone == Player.white:
-                    board_row.append("white")
-                else:
-                    # pyrefly: ignore [bad-argument-type]
-                    board_row.append(None)
+                board_row.append(
+                    "black"
+                    if stone == Player.black
+                    else "white"
+                    if stone == Player.white
+                    else "empty"
+                )
             board_state.append(board_row)
+        return board_state
 
-        return {
+    def to_dict(self):
+        if self._cached_dict is not None:
+            return self._cached_dict
+
+        self._cached_dict = {
             "id": self.id,
             "board_size": self.board_size,
-            "board_state": board_state,
+            "board_state": self._serialize_board_state(),
             "current_player": "black"
             if self.game_state.next_player == Player.black
             else "white",
@@ -91,6 +97,7 @@ class GameSession:
             else None,
             "last_modified": self.last_modified,
         }
+        return self._cached_dict
 
 
 def create_players_from_mode(mode: str):
@@ -123,8 +130,6 @@ def make_ai_move(game_id: str):
     if not isinstance(current_player, RandomBot):
         return
 
-    time.sleep(1.5)
-
     try:
         current_player_before = session.game_state.next_player
         move = current_player.select_move(session.game_state)
@@ -132,6 +137,7 @@ def make_ai_move(game_id: str):
         if move:
             session.game_state = session.game_state.apply_move(move)
             session.last_modified = time.time()
+            session._invalidate_cache()
 
             move_data = MoveData(
                 player="black" if current_player_before == Player.black else "white",
@@ -222,6 +228,7 @@ def make_move(game_id: str):
         current_player_before = session.game_state.next_player
         session.game_state = session.game_state.apply_move(move)
         session.last_modified = time.time()
+        session._invalidate_cache()
 
         move_data = MoveData(
             player="black" if current_player_before == Player.black else "white",

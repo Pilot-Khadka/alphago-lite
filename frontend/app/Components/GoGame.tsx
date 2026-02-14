@@ -1,63 +1,61 @@
-// GoGame.tsx
-// GoGame.tsx
 "use client"
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoBoard } from './GoBoard';
-import { GameModeSelection } from './GameModeSelection';
 import { GameInfo } from './GameInfo';
 import { GameControls } from './GameControls';
 import { MoveHistory } from './MoveHistory';
 import { GameState, GameMode } from '../types/types';
 import { io, Socket } from "socket.io-client";
+import { useRouter } from 'next/navigation';
 
-// The URL of your Flask backend.
 const API_URL = 'http://127.0.0.1:5000/api';
 
-export const GoGame: React.FC<{ size: number }> = ({ size }) => {
+interface GoGameProps {
+  size: number;
+  initialMode?: string;
+}
+
+export const GoGame: React.FC<GoGameProps> = ({ size, initialMode }) => {
+  const router = useRouter();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [gameMode, setGameMode] = useState<GameMode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [isDark, setIsDark] = useState(true);
   const socketRef = useRef<Socket | null>(null);
+  const gameInitialized = useRef(false);
 
   useEffect(() => {
-    // Only set up the connection once
     if (!socketRef.current) {
-        socketRef.current = io('http://127.0.0.1:5000');
-        socketRef.current.on('connect', () => {
-            console.log('Connected to server via WebSocket');
-            // If we have a game ID, join the room immediately
-            if (gameState?.id) {
-                socketRef.current?.emit('join_game', { room: gameState.id });
-            }
-        });
-        socketRef.current.on('game_update', (data: { game: GameState }) => {
-            console.log('Game update received:', data.game);
-            setGameState(data.game);
-            setLoading(false);
-        });
-        socketRef.current.on('disconnect', () => {
-            console.log('Disconnected from server');
-        });
+      socketRef.current = io('http://127.0.0.1:5000');
+      socketRef.current.on('connect', () => {
+        console.log('Connected to server via WebSocket');
+        if (gameState?.id) {
+          socketRef.current?.emit('join_game', { room: gameState.id });
+        }
+      });
+      socketRef.current.on('game_update', (data: { game: GameState }) => {
+        console.log('Game update received:', data.game);
+        setGameState(data.game);
+        setLoading(false);
+      });
+      socketRef.current.on('disconnect', () => {
+        console.log('Disconnected from server');
+      });
     }
 
-    // Join the room whenever the gameState changes to a new game
     if (gameState?.id && socketRef.current?.connected) {
-        console.log(`Attempting to join game room: ${gameState.id}`);
-        socketRef.current?.emit('join_game', { room: gameState.id });
+      console.log(`Attempting to join game room: ${gameState.id}`);
+      socketRef.current?.emit('join_game', { room: gameState.id });
     }
 
     return () => {
-        // Clean up the socket connection when the component unmounts
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-            socketRef.current = null;
-        }
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
-}, [gameState]);
-
+  }, [gameState]);
 
   const startNewGame = useCallback(async (mode: GameMode) => {
     setLoading(true);
@@ -81,6 +79,21 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
     }
   }, [size]);
 
+  useEffect(() => {
+    if (initialMode && !gameInitialized.current) {
+      gameInitialized.current = true;
+
+      const modeMap: { [key: string]: GameMode } = {
+        'pvp': 'human-human',
+        'ai': 'human-bot',
+        'spectate': 'bot-bot'
+      };
+
+      const mode = modeMap[initialMode] || 'human-bot';
+      startNewGame(mode);
+    }
+  }, [initialMode, startNewGame]);
+
   const handleMove = useCallback(async (row: number, col: number) => {
     if (!gameState?.id) return;
     setLoading(true);
@@ -95,7 +108,6 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to make move");
       }
-      // Do NOT set game state here. The WebSocket will handle the update.
     } catch (err: any) {
       setError(err.message || "An error occurred while making the move.");
       setLoading(false);
@@ -116,7 +128,6 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to pass turn");
       }
-      // Do NOT set game state here. The WebSocket will handle the update.
     } catch (err: any) {
       setError(err.message || "An error occurred while passing the turn.");
       setLoading(false);
@@ -136,7 +147,6 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
       if (!response.ok) {
         throw new Error("Failed to pause/resume game");
       }
-      // Do NOT set game state here. The WebSocket will handle the update.
     } catch (err: any) {
       setError(err.message || "An error occurred while pausing/resuming.");
       setLoading(false);
@@ -174,34 +184,65 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
       }
       setGameState(null);
       setGameMode(null);
+      gameInitialized.current = false;
+
+      if (initialMode) {
+        const modeMap: { [key: string]: GameMode } = {
+          'pvp': 'human-human',
+          'ai': 'human-bot',
+          'spectate': 'bot-bot'
+        };
+        const mode = modeMap[initialMode] || 'human-bot';
+        startNewGame(mode);
+      }
     } catch (err: any) {
       setError(err.message || "An error occurred while resetting the game.");
     } finally {
       setLoading(false);
     }
-  }, [gameState]);
+  }, [gameState, initialMode, startNewGame]);
 
+  const handleBackToHome = () => {
+    router.push('/');
+  };
 
   return (
-    <div className={`p-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-      <div className={`flex items-center justify-between mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-        <h1 className="text-xl font-bold">Go Game</h1>
-        <button
-          onClick={() => setIsDark(!isDark)}
-          className={`p-2 rounded-full transition-colors duration-300 ${
-            isDark ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-gray-200 text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          {isDark ? '☀️' : '🌙'}
-        </button>
+    <div className="min-h-screen bg-[#f5f0e8] p-6">
+      <div className="flex items-center justify-between mb-6 text-slate-800">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleBackToHome}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/70 hover:bg-white border border-slate-300 transition-all duration-200 shadow-sm hover:shadow-md"
+          >
+            <span>←</span>
+            <span className="font-light">Back to Home</span>
+          </button>
+          <h1 className="text-2xl font-light tracking-wide">Go Game</h1>
+        </div>
       </div>
 
-      {error && <div className={`text-red-500 mb-4 ${isDark ? 'bg-red-900/50' : 'bg-red-100'} p-3 rounded-lg`}>{error}</div>}
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg shadow-sm">
+          {error}
+        </div>
+      )}
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="w-full lg:w-1/3 space-y-6">
-          {gameState && <GameInfo gameState={gameState} isDark={isDark} />}
-          {gameState && (
+      {!gameState && loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="relative mx-auto w-12 h-12 mb-4">
+              <div className="w-12 h-12 border-4 border-slate-300 rounded-full" />
+              <div className="absolute top-0 left-0 w-12 h-12 border-4 border-slate-800 border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="text-slate-600 font-light">Creating your game...</p>
+          </div>
+        </div>
+      )}
+
+      {gameState && (
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="w-full lg:w-1/3 space-y-6">
+            <GameInfo gameState={gameState} />
             <GameControls
               gameState={gameState}
               gameMode={gameMode}
@@ -211,15 +252,10 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
               onAnalyze={handleAnalyze}
               onReset={handleReset}
               isPaused={isPaused}
-              isDark={isDark}
             />
-          )}
-          {gameState && <MoveHistory moveHistory={gameState.move_history} isDark={isDark} />}
-        </div>
-        <div className="w-full lg:w-2/3">
-          {!gameMode ? (
-            <GameModeSelection onStartGame={startNewGame} loading={loading} isDark={isDark} />
-          ) : (
+            <MoveHistory moveHistory={gameState.move_history} />
+          </div>
+          <div className="w-full lg:w-2/3">
             <GoBoard
               gameState={gameState}
               gameMode={gameMode}
@@ -227,11 +263,10 @@ export const GoGame: React.FC<{ size: number }> = ({ size }) => {
               cellSize={40}
               loading={loading}
               onMove={handleMove}
-              isDark={isDark}
             />
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

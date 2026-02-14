@@ -1,21 +1,19 @@
-// GoBoard.tsx
 import React from 'react';
 import { GoBoardProps } from '../types/types';
 
-export const GoBoard: React.FC<GoBoardProps> = ({ 
-  gameState, 
-  gameMode, 
-  size, 
-  cellSize, 
-  loading, 
-  onMove,
-  isDark
+export const GoBoard: React.FC<GoBoardProps> = ({
+  gameState,
+  gameMode,
+  size,
+  cellSize,
+  loading,
+  onMove
 }) => {
   const boardPx = cellSize * (size - 1) + 40;
   const board = gameState?.board_state || Array.from({ length: size }, () => Array(size).fill(null));
 
-  const allowClicks = gameState && gameState.status === "playing" && !loading && 
-    (gameMode === "human-human" || 
+  const allowClicks = gameState && gameState.status === "playing" && !loading &&
+    (gameMode === "human-human" ||
      (gameMode === "human-bot" && gameState.current_player === "black"));
 
   const handleCellClick = (row: number, col: number) => {
@@ -24,27 +22,20 @@ export const GoBoard: React.FC<GoBoardProps> = ({
   };
 
   return (
-    <div className={`${
-      isDark 
-        ? 'bg-gray-800/30 border-gray-700 shadow-2xl' 
-        : 'bg-white/90 border-gray-200 shadow-xl'
-    } backdrop-blur-lg border rounded-3xl p-6 transition-all duration-300`}>
+    <div className="bg-white/70 backdrop-blur-lg border border-slate-300 rounded-2xl p-6 shadow-xl transition-all duration-300">
       <svg
         width={boardPx}
         height={boardPx}
         style={{
-          background: isDark 
-            ? "linear-gradient(135deg, #8B4513 0%, #A0522D 100%)"
-            : "linear-gradient(135deg, #DDB67D 0%, #F4E4BC 100%)",
+          background: "linear-gradient(135deg, #DDB67D 0%, #E8C99D 50%, #F4E4BC 100%)",
           borderRadius: "16px",
           filter: loading ? "blur(1px) opacity(0.7)" : "none",
           transition: "all 0.3s ease",
         }}
         className="shadow-lg"
       >
-        {/* Grid lines */}
         {Array.from({ length: size }).map((_, i) => (
-          <g key={i} stroke={isDark ? "#654321" : "#8B7355"} strokeWidth={1.5}>
+          <g key={i} stroke="#8B6914" strokeWidth={1.5} opacity={0.7}>
             <line
               x1={20}
               y1={20 + i * cellSize}
@@ -60,22 +51,33 @@ export const GoBoard: React.FC<GoBoardProps> = ({
           </g>
         ))}
 
-        {/* Star points for 9x9 board */}
+        {size === 19 &&
+          [3, 9, 15].flatMap(x => [3, 9, 15].map(y => ({ x, y })))
+            .map(({ x, y }, idx) => (
+              <circle
+                key={idx}
+                cx={20 + x * cellSize}
+                cy={20 + y * cellSize}
+                r={4}
+                fill="#654321"
+                opacity={0.5}
+              />
+            ))}
+
         {size === 9 &&
           [2, 6].flatMap(x => [2, 6].map(y => ({ x, y })))
             .concat([{ x: 4, y: 4 }])
             .map(({ x, y }, idx) => (
-              <circle 
-                key={idx} 
-                cx={20 + x * cellSize} 
-                cy={20 + y * cellSize} 
-                r={3} 
-                fill={isDark ? "#4A4A4A" : "#333333"}
-                opacity={0.6}
+              <circle
+                key={idx}
+                cx={20 + x * cellSize}
+                cy={20 + y * cellSize}
+                r={3}
+                fill="#654321"
+                opacity={0.5}
               />
             ))}
 
-        {/* Intersection hover effects */}
         {allowClicks && Array.from({ length: size }).map((_, x) =>
           Array.from({ length: size }).map((_, y) => {
             if (board[x][y]) return null;
@@ -87,26 +89,22 @@ export const GoBoard: React.FC<GoBoardProps> = ({
                 r={cellSize / 2 - 2}
                 fill="transparent"
                 stroke="transparent"
-                className="hover:fill-black hover:fill-opacity-10 transition-all duration-200 cursor-pointer"
+                className="hover:fill-slate-800 hover:fill-opacity-10 transition-all duration-200 cursor-pointer"
                 onClick={() => handleCellClick(x, y)}
               />
             );
           })
         )}
 
-        {/* Stones */}
         {board.map((row, x) =>
           row.map((cell, y) => {
             if (!cell) return null;
-            
+
             const isBlack = cell === 'black';
-            const shadowColor = isBlack 
-              ? (isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.6)')
-              : (isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.3)');
-            
+            const shadowColor = isBlack ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)';
+
             return (
               <g key={`${x}-${y}`}>
-                {/* Stone shadow */}
                 <ellipse
                   cx={20 + x * cellSize + 2}
                   cy={20 + y * cellSize + 2}
@@ -114,17 +112,16 @@ export const GoBoard: React.FC<GoBoardProps> = ({
                   ry={cellSize / 2 - 3}
                   fill={shadowColor}
                 />
-                
-                {/* Stone */}
+
                 <circle
                   cx={20 + x * cellSize}
                   cy={20 + y * cellSize}
                   r={cellSize / 2 - 2}
-                  fill={isBlack 
-                    ? "url(#blackStoneGradient)" 
+                  fill={isBlack
+                    ? "url(#blackStoneGradient)"
                     : "url(#whiteStoneGradient)"
                   }
-                  stroke={isBlack ? "#1a1a1a" : "#d0d0d0"}
+                  stroke={isBlack ? "#0a0a0a" : "#e0e0e0"}
                   strokeWidth={1}
                 />
               </g>
@@ -132,28 +129,25 @@ export const GoBoard: React.FC<GoBoardProps> = ({
           })
         )}
 
-        {/* Gradients for stones */}
         <defs>
-          <radialGradient id="blackStoneGradient" cx="30%" cy="30%">
+          <radialGradient id="blackStoneGradient" cx="35%" cy="35%">
             <stop offset="0%" stopColor="#4a4a4a" />
-            <stop offset="70%" stopColor="#1a1a1a" />
-            <stop offset="100%" stopColor="#000000" />
+            <stop offset="60%" stopColor="#2a2a2a" />
+            <stop offset="100%" stopColor="#1a1a1a" />
           </radialGradient>
-          <radialGradient id="whiteStoneGradient" cx="30%" cy="30%">
+          <radialGradient id="whiteStoneGradient" cx="35%" cy="35%">
             <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="70%" stopColor="#f0f0f0" />
-            <stop offset="100%" stopColor="#d0d0d0" />
+            <stop offset="60%" stopColor="#f5f5f5" />
+            <stop offset="100%" stopColor="#e8e8e8" />
           </radialGradient>
         </defs>
       </svg>
 
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 rounded-3xl">
-          <div className={`${
-            isDark ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
-          } px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2`}>
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm font-medium">Processing move...</span>
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/10 rounded-2xl backdrop-blur-sm">
+          <div className="bg-white px-6 py-3 rounded-xl shadow-lg flex items-center space-x-3 border border-slate-300">
+            <div className="w-4 h-4 border-2 border-slate-800 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-light text-slate-700">Processing move...</span>
           </div>
         </div>
       )}

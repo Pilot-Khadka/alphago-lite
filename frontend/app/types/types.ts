@@ -1,4 +1,3 @@
-// types.ts
 export type Stone = "black" | "white" | null;
 export type GameMode = "human-human" | "human-bot" | "bot-bot" | null;
 export type GameStatus = "waiting" | "playing" | "paused" | "finished";
@@ -17,7 +16,6 @@ export interface GameState {
 
 export interface GameInfoProps {
   gameState: GameState;
-  isDark: boolean;
 }
 
 export interface GameControlsProps {
@@ -29,7 +27,6 @@ export interface GameControlsProps {
   onAnalyze: () => void;
   onReset: () => void;
   isPaused: boolean;
-  isDark: boolean;
 }
 
 export interface GoBoardProps {
@@ -39,16 +36,13 @@ export interface GoBoardProps {
   cellSize: number;
   loading: boolean;
   onMove: (row: number, col: number) => void;
-  isDark: boolean;
 }
 
 export interface GameModeSelectionProps {
   onStartGame: (mode: GameMode) => void;
   loading: boolean;
-  isDark: boolean;
 }
 
 export interface MoveHistoryProps {
   moveHistory: any[];
-  isDark: boolean;
 }
