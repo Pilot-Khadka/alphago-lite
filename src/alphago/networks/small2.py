@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -17,11 +19,17 @@ class ResidualBlock(nn.Module):
         return F.relu(out + identity)
 
 
-class SmallGoPolicyNet(nn.Module):
-    def __init__(self, input_channels, board_size=19, num_blocks=6):
+class SmallResdualNetwork(nn.Module):
+    def __init__(
+        self,
+        input_shape: Tuple,
+        board_size=19,
+        num_blocks=6,
+    ):
         super().__init__()
+        channels, height, width = input_shape
 
-        self.conv_in = nn.Conv2d(input_channels, 64, 3, padding=1, bias=False)
+        self.conv_in = nn.Conv2d(channels, 64, 3, padding=1, bias=False)
         self.bn_in = nn.BatchNorm2d(64)
 
         self.res_blocks = nn.Sequential(*[ResidualBlock(64) for _ in range(num_blocks)])

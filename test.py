@@ -1,4 +1,3 @@
-# pyrefly: ignore [missing-import]
 from backend.app import app
 
 if __name__ == "__main__":

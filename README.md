@@ -1,1 +1,1 @@
-# alphago-2-zero
+![Tests](https://github.com/Pilot-Khadka/alphago-lite/actions/workflows/test.yml/badge.svg)

@@ -5,7 +5,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
 from alphago.train import GoTrainer
-from alphago.networks import SmallNetwork
+
+# from alphago.networks import SmallNetwork
+from alphago.networks import SmallResdualNetwork
 from alphago.encoders import OnePlaneEncoder
 from alphago.data.data_loader import GoDataset
 from alphago.util import load_config
@@ -47,7 +49,8 @@ def train_ddp(config):
     )
 
     input_shape = (encoder.num_planes, board_size, board_size)
-    model = SmallNetwork(input_shape).cuda(local_rank)
+    # model = SmallNetwork(input_shape).cuda(local_rank)
+    model = SmallResdualNetwork(input_shape=input_shape).cuda(local_rank)
 
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
@@ -88,7 +91,8 @@ def train_single_gpu(config):
     )
 
     input_shape = (encoder.num_planes, board_size, board_size)
-    model = SmallNetwork(input_shape)
+    # model = SmallNetwork(input_shape)
+    model = SmallResdualNetwork(input_shape=input_shape)
 
     if torch.cuda.device_count() > 1 and config.use_data_parallel:
         print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
