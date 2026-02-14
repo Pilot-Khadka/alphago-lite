@@ -1,5 +1,4 @@
-# pyrefly: ignore [missing-import]
-from alphago.gotypes import Point
+from ..gotypes import Point
 
 
 def is_point_and_eye(board, point, color):

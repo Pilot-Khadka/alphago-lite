@@ -1,9 +1,7 @@
 import tkinter as tk
 
-# pyrefly: ignore [missing-import]
-from dlgo import gotypes
-# pyrefly: ignore [missing-import]
-from dlgo.gotypes import Player
+from .gotypes import Player, Point
+
 
 cols = "ABCDEFGHIJKLMNOPQRST"
 stone_to_char = {None: ".", Player.black: "X", Player.white: "O"}
@@ -26,12 +24,10 @@ class GoBoardDisplay:
     def __init__(self, board_size=19):
         self.board_size = board_size
 
-        # gui setup
         self.root = tk.Tk()
         self.root.title("Go Board Display")
         self.root.resizable(False, False)
 
-        # canvas for the board
         self.cell_size = 25
         self.margin = 30
         canvas_size = (board_size - 1) * self.cell_size + 2 * self.margin
@@ -150,7 +146,7 @@ class GoBoardDisplay:
     def update_board(self, board):
         for row in range(1, board.size + 1):
             for col in range(1, board.size + 1):
-                stone = board.get(gotypes.Point(row=row, col=col))
+                stone = board.get(Point(row=row, col=col))
                 # Convert to 0-based indexing for internal storage
                 self.board_grid[row - 1][col - 1] = stone
 

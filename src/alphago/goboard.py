@@ -1,5 +1,4 @@
-# pyrefly: ignore [missing-import]
-import src.zobrist as zobrist
+from . import zobrist
 from .gotypes import Player, Point
 
 

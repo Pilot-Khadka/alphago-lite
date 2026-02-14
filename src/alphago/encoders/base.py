@@ -1,8 +1,10 @@
+from typing import Any
+
 import importlib
 
 
 class Encoder:
-    def name(self):
+    def name(self) -> str:
         raise NotImplementedError()
 
     def encode(self, game_state):
@@ -22,6 +24,6 @@ class Encoder:
 
 
 def get_encoder_by_name(name, board_size):
-    module = importlib.import_module("dlgo.encoders." + name)
+    module = importlib.import_module("src.encoders." + name)
     constructor = getattr(module, "create")
     return constructor(board_size)

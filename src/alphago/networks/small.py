@@ -7,10 +7,10 @@ class SmallNetwork(nn.Module):
         channels, height, width = input_shape
 
         self.features = nn.Sequential(
-            nn.Conv2d(channels, 32, kernel_size=5, padding=2, bias=False),
+            nn.Conv2d(channels, 32, kernel_size=3, padding=2, bias=False),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=5, padding=2, bias=False),
+            nn.Conv2d(32, 64, kernel_size=3, padding=2, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((4, 4)),

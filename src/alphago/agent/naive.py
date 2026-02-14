@@ -1,24 +1,23 @@
+from typing import Optional
+
 import time
 import random
 import threading
 
-# pyrefly: ignore [missing-import]
-from alphago.gotypes import Player
-# pyrefly: ignore [missing-import]
-from alphago.agent.base import Agent
-# pyrefly: ignore [missing-import]
-from alphago.agent.helpers import is_point_and_eye
-# pyrefly: ignore [missing-import]
-from alphago.goboard import Move
-# pyrefly: ignore [missing-import]
-from alphago.gotypes import Point
-# pyrefly: ignore [missing-import]
-from alphago.configs.types import AIModelType
+from ..gotypes import Player
+from ..agent.base import Agent
+from ..agent.helpers import is_point_and_eye
+from ..goboard import Move
+from ..gotypes import Point
+from ..configs.types import AIModelType
 
 
 class RandomBot(Agent):
     def __init__(
-        self, player_color: Player, model_type: AIModelType = None, name: str = ""
+        self,
+        player_color: Player,
+        model_type: AIModelType | None,
+        name: str = "",
     ):
         self.player_color = player_color
         self.model_type = model_type or AIModelType.NAIVE

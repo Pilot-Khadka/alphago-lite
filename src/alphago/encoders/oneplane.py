@@ -17,7 +17,6 @@ class OnePlaneEncoder(Encoder):
         self.board_size = board_size
         self.num_planes = 1
 
-    # pyrefly: ignore [bad-override]
     def name(self):
         return "oneplane"
 

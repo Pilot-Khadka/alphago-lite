@@ -10,7 +10,6 @@ class SevenPlaneEncoder(Encoder):
         self.board_size = board_size
         self.num_planes = 7
 
-    # pyrefly: ignore [bad-override]
     def name(self):
         return "sevenplane"
 

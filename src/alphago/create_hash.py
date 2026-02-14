@@ -1,5 +1,6 @@
 import random
-from gotypes import Player, Point
+
+from .gotypes import Player, Point
 
 
 def to_python(player_state):

@@ -4,11 +4,11 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
-from src.train import GoTrainer
-from src.networks import SmallNetwork
-from src.encoders import OnePlaneEncoder
-from src.data.data_loader import GoDataset
-from src.util import load_config
+from alphago.train import GoTrainer
+from alphago.networks import SmallNetwork
+from alphago.encoders import OnePlaneEncoder
+from alphago.data.data_loader import GoDataset
+from alphago.util import load_config
 
 
 def setup_ddp():
@@ -26,8 +26,8 @@ def train_ddp(config):
     board_size = 19
     encoder = OnePlaneEncoder(board_size)
 
-    train_dataset = GoDataset("dataset/train")
-    val_dataset = GoDataset("dataset/val")
+    train_dataset = GoDataset(config.train_path)
+    val_dataset = GoDataset(config.val_path)
 
     train_sampler = DistributedSampler(train_dataset)
     val_sampler = DistributedSampler(val_dataset, shuffle=False)
@@ -71,8 +71,8 @@ def train_single_gpu(config):
     board_size = 19
     encoder = OnePlaneEncoder(board_size)
 
-    train_dataset = GoDataset("dataset/train")
-    val_dataset = GoDataset("dataset/val")
+    train_dataset = GoDataset(config.train_path)
+    val_dataset = GoDataset(config.val_path)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -113,6 +113,8 @@ def train_single_gpu(config):
 
 def main():
     config = load_config("config/one_plane.yaml")
+    config.train_path = "dataset/train"
+    config.val_path = "dataset/val"
 
     if torch.cuda.device_count() > 1:
         print(f"Launching DDP on {torch.cuda.device_count()} GPUs")

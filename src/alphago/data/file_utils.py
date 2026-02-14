@@ -37,20 +37,21 @@ def extract_moves(sgf_string):
     return moves, handicap_info
 
 
-def read_txt_files(folder_path) -> List:
+def read_txt_files(file_path) -> List:
+    if not file_path.endswith(".txt"):
+        raise RuntimeError(
+            f"{file_path} is not a valid file. A valid file ends with .txt"
+        )
+
     games = None
-    for file_name in os.listdir(folder_path):
-        if file_name.endswith(".txt"):
-            file_path = os.path.join(folder_path, file_name)
-            print(f"\nReading: {file_path}")
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
 
-        # pyrefly: ignore [unbound-name]
-        games = content.split("\n")  # each SGF game is on its own line
-        games = [game for game in games if game.strip()]  # remove empty lines
+    # pyrefly: ignore [unbound-name]
+    games = content.split("\n")  # each SGF game is on its own line
+    games = [game for game in games if game.strip()]  # remove empty lines
 
-        print(f"Total games: {len(games)}")
+    print(f"Total games: {len(games)}")
     # pyrefly: ignore [bad-return]
     return games
 
