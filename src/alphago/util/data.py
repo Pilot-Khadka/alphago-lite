@@ -16,6 +16,12 @@ class Config:
             value = [Config(x) if isinstance(x, dict) else x for x in value]
         super().__setattr__(name, value)
 
+    def __getattr__(self, name):
+        # auto create nested config if missing
+        value = Config()
+        super().__setattr__(name, value)
+        return value
+
     def to_dict(self):
         out = {}
         for k, v in self.__dict__.items():

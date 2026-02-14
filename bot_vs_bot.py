@@ -2,9 +2,10 @@ import time
 import statistics
 
 from alphago import gotypes
-from alphago.agent.mcts import MCTSBot
 from alphago import goboard
-from alphago.display_board import print_move, GoBoardDisplay
+
+from alphago.agent.mcts import MCTSBot
+from alphago.util.display_board import print_move, GoBoardDisplay
 
 
 def main():

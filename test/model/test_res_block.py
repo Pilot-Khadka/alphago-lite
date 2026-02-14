@@ -1,6 +1,6 @@
 import torch
 import pytest
-from alphago.networks import SmallResdualNetwork
+from alphago.networks import SmallResidualNetwork
 
 
 @pytest.mark.parametrize("batch_size", [1, 4, 8])
@@ -10,7 +10,7 @@ def test_small_residual_network_forward(batch_size, board_size):
     input_shape = (input_channels, board_size, board_size)
 
     x = torch.randn(batch_size, *input_shape)
-    model = SmallResdualNetwork(input_shape=input_shape, board_size=board_size)
+    model = SmallResidualNetwork(channel_size=input_channels, board_size=board_size)
 
     output = model(x)
 
@@ -29,7 +29,7 @@ def test_residual_blocks_gradient():
     input_shape = (input_channels, board_size, board_size)
 
     x = torch.randn(batch_size, *input_shape, requires_grad=True)
-    model = SmallResdualNetwork(input_shape=input_shape, board_size=board_size)
+    model = SmallResidualNetwork(channel_size=input_channels, board_size=board_size)
 
     output = model(x)
     loss = output.sum()

@@ -1,2 +1,2 @@
 from .small import SmallNetwork
-from .small2 import SmallResdualNetwork
+from .small2 import SmallResidualNetwork

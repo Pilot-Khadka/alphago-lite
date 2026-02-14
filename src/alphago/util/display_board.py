@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from .gotypes import Player, Point
+from ..gotypes import Player, Point
 
 
 cols = "ABCDEFGHIJKLMNOPQRST"

@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -19,17 +17,15 @@ class ResidualBlock(nn.Module):
         return F.relu(out + identity)
 
 
-class SmallResdualNetwork(nn.Module):
+class SmallResidualNetwork(nn.Module):
     def __init__(
         self,
-        input_shape: Tuple,
-        board_size=19,
+        channel_size: int,
+        board_size: int,
         num_blocks=6,
     ):
         super().__init__()
-        channels, height, width = input_shape
-
-        self.conv_in = nn.Conv2d(channels, 64, 3, padding=1, bias=False)
+        self.conv_in = nn.Conv2d(channel_size, 64, 3, padding=1, bias=False)
         self.bn_in = nn.BatchNorm2d(64)
 
         self.res_blocks = nn.Sequential(*[ResidualBlock(64) for _ in range(num_blocks)])
@@ -41,7 +37,6 @@ class SmallResdualNetwork(nn.Module):
         )
 
         self.policy_fc = nn.Linear(2 * board_size * board_size, board_size * board_size)
-
         self._initialize_weights()
 
     def forward(self, x):

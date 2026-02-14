@@ -3,9 +3,16 @@ name = "alphago-lite"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10.18"
+requires-python = ">=3.10"
 dependencies = []
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]

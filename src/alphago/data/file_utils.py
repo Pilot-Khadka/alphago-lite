@@ -4,19 +4,26 @@ Each move is ;B[xy] or ;W[xy] where:
     a = 0, b = 1, ..., s = 18
 """
 
-from typing import List
+from typing import List, Tuple, Optional
 
 import re
-import os
 from ..goboard import Move, Point, GameState
 
 
-def sgf_to_coords(sgf_coord):
+def sgf_to_coords(sgf_coord) -> Optional[Tuple]:
     if sgf_coord == "" or len(sgf_coord) != 2:
         return None  # pass move or invalid
+
     col = ord(sgf_coord[0]) - ord("a") + 1
     row = ord(sgf_coord[1]) - ord("a") + 1
     return (row, col)
+
+
+def extract_board_size(sgf_string: str):
+    match = re.search(r"SZ\[(\d+)\]", sgf_string)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def extract_moves(sgf_string):

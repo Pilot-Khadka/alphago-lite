@@ -1,10 +1,24 @@
-data_dir: dataset/
-train_games: 100
-val_games: 20
-batch_size: 32
-lr: 1e-3
-num_epochs: 40
-num_workers: 2
-max_moves_per_game: 300
-save_dir: checkpoint
-weight_decay: 1e-4
+data:
+  root_dir: dataset/
+  board_size: 19
+  train_games: 100
+  val_games: 20
+  max_moves_per_game: 300
+
+loader:
+  batch_size: 32
+  num_workers: 2
+  pin_memory: true
+
+optimizer:
+  lr: 1e-3
+  weight_decay: 1e-4
+
+train:
+  num_epochs: 40
+  device: cuda
+  use_data_parallel: true
+
+checkpoint:
+  save_dir: checkpoint/
+  save_every: 5
