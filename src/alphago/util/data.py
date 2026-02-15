@@ -37,6 +37,13 @@ class Config:
         with Path(path).open("w", encoding="utf-8") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False)
 
+    def dump(self, stream=None):
+        text = yaml.dump(self.to_dict(), default_flow_style=False)
+        if stream is None:
+            print(text)
+        else:
+            stream.write(text)
+
 
 def load_config(config_path: str | Path):
     path = Path(config_path)

@@ -1,4 +1,5 @@
 import torch
+# pyrefly: ignore [missing-import]
 import pytest
 from alphago.networks import SmallResidualNetwork
 

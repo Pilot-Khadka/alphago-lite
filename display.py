@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from alphago.display_board import GoBoardDisplay
 
 

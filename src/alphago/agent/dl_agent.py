@@ -1,9 +1,8 @@
 import numpy as np
 
-# pyrefly: ignore [missing-import]
-from dlgo import goboard
-# pyrefly: ignore [missing-import]
-from dlgo.agent.base import Agent
+from .. import goboard
+from .helpers import is_point_an_eye
+from alphago.agent.base import Agent
 
 
 class DeepLearningAgent(Agent):
@@ -28,11 +27,11 @@ class DeepLearningAgent(Agent):
         ranked_moves = np.random.choice(
             candidates, num_moves, replace=False, p=move_probs
         )
+
         for point_idx in ranked_moves:
             point = self.encoder.decode_point_index(point_idx)
             if game_state.is_valid_move(
                 goboard.Move.play(point)
-            # pyrefly: ignore [unknown-name]
             ) and not is_point_an_eye(game_state.board, point, game_state.next_player):
                 return goboard.Move.play(point)
         return goboard.Move.pass_turn()
@@ -40,7 +39,6 @@ class DeepLearningAgent(Agent):
     def serialize(
         self,
     ):
-        # serialization of encoder,
         raise NotImplementedError()
 
     def load_prediction_agent():

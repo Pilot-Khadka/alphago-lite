@@ -6,6 +6,7 @@ import threading
 
 from ..gotypes import Player
 from ..agent.base import Agent
+# pyrefly: ignore [missing-module-attribute]
 from ..agent.helpers import is_point_and_eye
 from ..goboard import Move
 from ..gotypes import Point

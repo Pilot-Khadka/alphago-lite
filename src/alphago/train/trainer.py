@@ -1,6 +1,7 @@
 import os
 import time
 import json
+
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
@@ -12,6 +13,31 @@ import torch.optim as optim
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
+
+
+def is_notebook():
+    try:
+        import IPython  # pyrefly: ignore[missing-import]
+        from IPython import get_ipython  # pyrefly: ignore
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    ip = get_ipython()
+    if ip is None:
+        # No active interactive shell -> regular Python script/terminal
+        return False
+
+    shell = ip.__class__.__name__
+    # Jupyter notebook or QtConsole -> notebook environments
+    if shell in ("ZMQInteractiveShell", "Shell"):
+        return True
+
+    # Terminal-running IPython (rare) -> treat as terminal
+    if shell == "TerminalInteractiveShell":
+        return False
+
+    # fallback for unknown shells
+    return False
 
 
 class GoTrainer:
@@ -33,6 +59,7 @@ class GoTrainer:
         self.use_ddp = use_ddp
         self.device = device
         self.save_dir = save_dir
+        self.disable_tqdm = is_notebook()
 
         if rank == 0:
             os.makedirs(save_dir, exist_ok=True)
@@ -43,7 +70,10 @@ class GoTrainer:
             self.model = DDP(self.model, device_ids=[rank])
             self.model_without_ddp = self.model.module
         else:
-            self.model_without_ddp = self.model
+            if isinstance(model, torch.nn.DataParallel):
+                self.model_without_ddp = model.module
+            else:
+                self.model_without_ddp = model
 
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -89,7 +119,11 @@ class GoTrainer:
         total = 0
 
         if self.rank == 0:
-            pbar = tqdm(self.train_loader, desc=f"Epoch {epoch + 1} [Train]")
+            pbar = tqdm(
+                self.train_loader,
+                desc=f"Epoch {epoch + 1} [Train]",
+                disable=self.disable_tqdm,
+            )
         else:
             pbar = self.train_loader
 
@@ -143,6 +177,8 @@ class GoTrainer:
         else:
             avg_loss = total_loss / len(self.train_loader)
             accuracy = 100.0 * correct / total
+
+        print(f"Train Loss: {avg_loss:.4f}, Train Acc: {accuracy:.2f}%")
         return avg_loss, accuracy
 
     def validate(self, epoch):
@@ -153,7 +189,11 @@ class GoTrainer:
 
         with torch.no_grad():
             if self.rank == 0:
-                pbar = tqdm(self.val_loader, desc=f"Epoch {epoch + 1} [Val]")
+                pbar = tqdm(
+                    self.val_loader,
+                    desc=f"Epoch {epoch + 1} [Val]",
+                    disable=self.disable_tqdm,
+                )
             else:
                 pbar = self.val_loader
 
@@ -194,6 +234,7 @@ class GoTrainer:
             avg_loss = total_loss / len(self.val_loader)
             accuracy = 100.0 * correct / total
 
+        print(f"Val Loss: {avg_loss:.4f}, Val Acc: {accuracy:.2f}%")
         return avg_loss, accuracy
 
     def save_checkpoint(self, epoch, val_accuracy, is_best=False):
@@ -220,7 +261,17 @@ class GoTrainer:
     def load_checkpoint(self, checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
 
-        self.model_without_ddp.load_state_dict(checkpoint["model_state_dict"])
+        state_dict = checkpoint["model_state_dict"]
+
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            if k.startswith("module."):
+                new_state_dict[k[7:]] = v
+            else:
+                new_state_dict[k] = v
+
+        self.model_without_ddp.load_state_dict(new_state_dict)
+
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.train_history = checkpoint["train_history"]
@@ -272,8 +323,6 @@ class GoTrainer:
                     self.writer.add_scalar("Accuracy/Validation", val_acc, epoch)
                     self.writer.add_scalar("Learning_Rate", current_lr, epoch)
 
-                print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
-                print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
                 print(f"Learning Rate: {current_lr:.6f}")
 
                 is_best = val_acc > self.best_val_accuracy

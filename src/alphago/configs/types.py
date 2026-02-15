@@ -1,6 +1,7 @@
+from typing import Dict, Any, List
+
 from enum import Enum
 from dataclasses import dataclass
-from typing import Dict, Any, List
 
 
 class AIModelType(Enum):

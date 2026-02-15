@@ -1,7 +1,7 @@
 from ..gotypes import Point
 
 
-def is_point_and_eye(board, point, color):
+def is_point_an_eye(board, point, color):
     """
     eye is an empty point completely surrounded by friendly stones
 

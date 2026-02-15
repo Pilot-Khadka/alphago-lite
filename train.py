@@ -1,13 +1,14 @@
 import os
+
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
 from alphago.train import GoTrainer
-
 from alphago.networks import SmallNetwork
-from alphago.networks import SmallResidualNetwork
+
+# from alphago.networks import SmallResidualNetwork
 from alphago.encoders import OnePlaneEncoder
 from alphago.data.data_loader import GoDataset
 from alphago.util import load_config
@@ -47,12 +48,12 @@ def train_ddp(config):
 
     encoder = OnePlaneEncoder(config.data.board_size)
 
-    # model = SmallNetwork(
-    #     num_channels=encoder.num_planes, board_size=config.data.board_size
-    # ).cuda(local_rank)
-    model = SmallResidualNetwork(
-        channel_size=encoder.num_planes, board_size=config.data.board_size
+    model = SmallNetwork(
+        num_channels=encoder.num_planes, board_size=config.data.board_size
     ).cuda(local_rank)
+    # model = SmallResidualNetwork(
+    #     channel_size=encoder.num_planes, board_size=config.data.board_size
+    # ).cuda(local_rank)
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     trainer = GoTrainer(
@@ -89,9 +90,13 @@ def train_single_gpu(config):
     )
 
     encoder = OnePlaneEncoder(config.data.board_size)
-    model = SmallResidualNetwork(
-        channel_size=encoder.num_planes, board_size=config.data.board_size
+
+    model = SmallNetwork(
+        num_channels=encoder.num_planes, board_size=config.data.board_size
     )
+    # model = SmallResidualNetwork(
+    #     channel_size=encoder.num_planes, board_size=config.data.board_size
+    # )
 
     if torch.cuda.device_count() > 1 and config.train.use_data_parallel:
         print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
@@ -118,6 +123,9 @@ def main():
     config = load_config("config/one_plane.yaml")
     config.data.train_path = "dataset/train"
     config.data.val_path = "dataset/val"
+
+    print("[INFO] Config loaded:")
+    config.dump()
 
     if torch.cuda.device_count() > 1:
         print(f"Launching DDP on {torch.cuda.device_count()} GPUs")
