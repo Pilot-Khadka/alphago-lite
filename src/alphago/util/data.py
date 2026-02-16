@@ -16,11 +16,20 @@ class Config:
             value = [Config(x) if isinstance(x, dict) else x for x in value]
         super().__setattr__(name, value)
 
+    # def __getattr__(self, name):
+    #    # auto create nested config if missing
+    #    value = Config()
+    #    super().__setattr__(name, value)
+    #    return value
+
     def __getattr__(self, name):
-        # auto create nested config if missing
-        value = Config()
-        super().__setattr__(name, value)
-        return value
+        raise AttributeError(f"'Config' object has no attribute '{name}'")
+
+    def __iter__(self):
+        return iter(self.__dict__.items())
+
+    def __repr__(self):
+        return f"Config({self.to_dict()})"
 
     def to_dict(self):
         out = {}

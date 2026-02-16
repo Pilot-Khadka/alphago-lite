@@ -1,51 +1,37 @@
 import sys
-import yaml
 import subprocess
 from pathlib import Path
 
-
-def load_config(config_path: Path) -> dict:
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    with config_path.open() as f:
-        return yaml.safe_load(f)
+from alphago.util.data import load_config
 
 
-def dataset_exists(name: Path) -> bool:
-    # pyrefly: ignore [unknown-name]
-    target = external_dir / name
-    return target.exists() and any(target.iterdir())
-
-
-def clone_dataset(name: str, url: str) -> None:
-    # pyrefly: ignore [unknown-name]
-    external_dir.mkdir(parents=True, exist_ok=True)
-    # pyrefly: ignore [unknown-name]
-    target = external_dir / name
+def clone_dataset(name: str, url: str, data_dir: Path) -> None:
+    data_dir.mkdir(parents=True, exist_ok=True)
     print(f"Cloning {name} from {url} ...")
     result = subprocess.run(
-        ["git", "clone", url, str(target)],
+        ["git", "clone", url, str(data_dir)],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         raise RuntimeError(f"git clone failed:\n{result.stderr.strip()}")
-    print(f"Done — dataset saved to {target}")
+    print(f"Dataset saved to {data_dir}")
 
 
 def main() -> None:
-    # pyrefly: ignore [missing-argument]
-    config = load_config()
-    datasets: dict = config.get("datasets", {})
+    main_dir = Path("external/")
+    config = load_config(config_path="config/data.yaml")
+    datasets = config.datasets
 
     if not datasets:
         print("No datasets defined in config.")
         sys.exit(0)
 
-    for name, meta in datasets.items():
-        if dataset_exists(name):
-            print(f"Dataset '{name}' already present at external/{name}, skipping.")
+    for name, meta in datasets:
+        data_dir = main_dir / name
+
+        if data_dir.exists() and any(data_dir.iterdir()):
+            print(f"Dataset '{name}' already present at {data_dir}, skipping.")
             continue
 
         ds_type = meta.get("type", "git")
@@ -59,7 +45,7 @@ def main() -> None:
             print(f"Unsupported type '{ds_type}' for '{name}', skipping.")
             continue
 
-        clone_dataset(name, url)
+        clone_dataset(name=name, url=url, data_dir=data_dir)
 
 
 if __name__ == "__main__":

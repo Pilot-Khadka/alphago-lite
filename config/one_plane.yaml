@@ -1,5 +1,7 @@
 data:
   root_dir: dataset/
+  train_path: dataset/train/
+  val_path: dataset/val/
   board_size: 19
   train_games: 100
   val_games: 20
