@@ -14,7 +14,7 @@ class DeepLearningAgent(Agent):
     def predict(self, game_state):
         encoded_state = self.encoder.encode(game_state)
         input_tensor = np.array([encoded_state])
-        return self.model.predict(input_tensor)[0]
+        return self.model.predict(input_tensor)
 
     def select_move(self, game_state):
         num_moves = self.encoder.board_size * self.encoder.board_size
@@ -35,11 +35,3 @@ class DeepLearningAgent(Agent):
             ) and not is_point_an_eye(game_state.board, point, game_state.next_player):
                 return goboard.Move.play(point)
         return goboard.Move.pass_turn()
-
-    def serialize(
-        self,
-    ):
-        raise NotImplementedError()
-
-    def load_prediction_agent():
-        raise NotImplementedError()

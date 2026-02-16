@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 jobs:
   test:
@@ -14,21 +14,15 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and Python
         uses: astral-sh/setup-uv@v5
         with:
+          # This replaces "uv python install" and "setup-python"
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install ${{ matrix.python-version }} --venv
-
-      - name: Install dependencies
-        run: uv pip install -e .[test]
 
       - name: Run tests
-        # Running via 'uv run' ensures the correct virtualenv is used
-        run: uv run pytest -v --cov=alphago
+        # This one command replaces venv creation, pip install, AND activation
+        run: uv run --extra test pytest -v --cov=alphago

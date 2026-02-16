@@ -6,8 +6,9 @@ import threading
 
 from ..gotypes import Player
 from ..agent.base import Agent
+
 # pyrefly: ignore [missing-module-attribute]
-from ..agent.helpers import is_point_and_eye
+from ..agent.helpers import is_point_an_eye
 from ..goboard import Move
 from ..gotypes import Point
 from ..configs.types import AIModelType
@@ -50,7 +51,7 @@ class RandomBot(Agent):
                 candidate = Point(row=r, col=c)
                 if game_state.is_valid_move(
                     Move.play(candidate)
-                ) and not is_point_and_eye(
+                ) and not is_point_an_eye(
                     game_state.board, candidate, game_state.next_player
                 ):
                     candidates.append(candidate)

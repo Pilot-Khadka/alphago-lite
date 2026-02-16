@@ -15,31 +15,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-def is_notebook():
-    try:
-        import IPython  # pyrefly: ignore[missing-import]
-        from IPython import get_ipython  # pyrefly: ignore
-    except (ImportError, ModuleNotFoundError):
-        return False
-
-    ip = get_ipython()
-    if ip is None:
-        # No active interactive shell -> regular Python script/terminal
-        return False
-
-    shell = ip.__class__.__name__
-    # Jupyter notebook or QtConsole -> notebook environments
-    if shell in ("ZMQInteractiveShell", "Shell"):
-        return True
-
-    # Terminal-running IPython (rare) -> treat as terminal
-    if shell == "TerminalInteractiveShell":
-        return False
-
-    # fallback for unknown shells
-    return False
-
-
 class GoTrainer:
     def __init__(
         self,
@@ -50,16 +25,17 @@ class GoTrainer:
         learning_rate: float,
         weight_decay: float,
         save_dir: Path = Path("checkpoint"),
-        rank=0,
-        world_size=1,
-        use_ddp=False,
+        rank: int = 0,
+        world_size: int = 1,
+        use_ddp: bool = False,
+        is_notebook: bool = False,
     ):
         self.rank = rank
         self.world_size = world_size
         self.use_ddp = use_ddp
         self.device = device
         self.save_dir = save_dir
-        self.disable_tqdm = is_notebook()
+        self.disable_tqdm = is_notebook
 
         if rank == 0:
             os.makedirs(save_dir, exist_ok=True)
@@ -67,7 +43,6 @@ class GoTrainer:
         self.model = model.to(device)
 
         if use_ddp and world_size > 1:
-            self.model = DDP(self.model, device_ids=[rank])
             self.model_without_ddp = self.model.module
         else:
             if isinstance(model, torch.nn.DataParallel):
@@ -261,17 +236,25 @@ class GoTrainer:
     def load_checkpoint(self, checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
 
-        state_dict = checkpoint["model_state_dict"]
+        def normalize_ddp_keys(state_dict, ddp_wrapped: bool):
+            new_sd = {}
+            for k, v in state_dict.items():
+                count = 0
+                while k.startswith("module."):
+                    k = k[len("module.") :]
+                    count += 1
 
-        new_state_dict = {}
-        for k, v in state_dict.items():
-            if k.startswith("module."):
-                new_state_dict[k[7:]] = v
-            else:
-                new_state_dict[k] = v
+                if ddp_wrapped:
+                    if count >= 1:
+                        k = "module." + k
 
-        self.model_without_ddp.load_state_dict(new_state_dict)
+                new_sd[k] = v
+            return new_sd
 
+        state_dict = checkpoint.get("model_state_dict", checkpoint)
+        state_dict = normalize_ddp_keys(state_dict, ddp_wrapped=self.use_ddp)
+
+        self.model.load_state_dict(state_dict)
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.train_history = checkpoint["train_history"]

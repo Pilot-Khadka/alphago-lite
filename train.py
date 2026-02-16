@@ -1,4 +1,5 @@
 import os
+import argparse
 
 import torch
 import torch.distributed as dist
@@ -6,9 +7,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
 from alphago.train import GoTrainer
-from alphago.networks import SmallNetwork
+# from alphago.networks import SmallNetwork
 
-# from alphago.networks import SmallResidualNetwork
+from alphago.networks import SmallResidualNetwork
 from alphago.encoders import OnePlaneEncoder
 from alphago.data.data_loader import GoDataset
 from alphago.util import load_config
@@ -21,6 +22,27 @@ def setup_ddp():
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
     return rank, world_size, local_rank
+
+
+def is_notebook():
+    try:
+        import IPython  # pyrefly: ignore[missing-import]
+        from IPython import get_ipython  # pyrefly: ignore
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    ip = get_ipython()
+    if ip is None:
+        return False
+
+    shell = ip.__class__.__name__
+    if shell in ("ZMQInteractiveShell", "Shell"):
+        return True
+
+    if shell == "TerminalInteractiveShell":
+        return False
+
+    return False
 
 
 def train_ddp(config):
@@ -48,12 +70,12 @@ def train_ddp(config):
 
     encoder = OnePlaneEncoder(config.data.board_size)
 
-    model = SmallNetwork(
-        num_channels=encoder.num_planes, board_size=config.data.board_size
-    ).cuda(local_rank)
-    # model = SmallResidualNetwork(
-    #     channel_size=encoder.num_planes, board_size=config.data.board_size
+    # model = SmallNetwork(
+    #     num_channels=encoder.num_planes, board_size=config.data.board_size
     # ).cuda(local_rank)
+    model = SmallResidualNetwork(
+        channel_size=encoder.num_planes, board_size=config.data.board_size
+    ).cuda(local_rank)
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     trainer = GoTrainer(
@@ -66,7 +88,11 @@ def train_ddp(config):
         rank=rank,
         world_size=world_size,
         use_ddp=True,
+        is_notebook=is_notebook(),
     )
+
+    if config.resume:
+        trainer.load_checkpoint(checkpoint_path=config.checkpoint_path)
 
     trainer.train(num_epochs=config.train.num_epochs)
     dist.destroy_process_group()
@@ -91,12 +117,12 @@ def train_single_gpu(config):
 
     encoder = OnePlaneEncoder(config.data.board_size)
 
-    model = SmallNetwork(
-        num_channels=encoder.num_planes, board_size=config.data.board_size
-    )
-    # model = SmallResidualNetwork(
-    #     channel_size=encoder.num_planes, board_size=config.data.board_size
+    # model = SmallNetwork(
+    #     num_channels=encoder.num_planes, board_size=config.data.board_size
     # )
+    model = SmallResidualNetwork(
+        channel_size=encoder.num_planes, board_size=config.data.board_size
+    )
 
     if torch.cuda.device_count() > 1 and config.train.use_data_parallel:
         print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
@@ -114,15 +140,33 @@ def train_single_gpu(config):
         rank=0,
         world_size=1,
         use_ddp=False,
+        is_notebook=is_notebook(),
     )
+
+    if config.resume:
+        trainer.load_checkpoint(checkpoint_path=config.checkpoint_path)
 
     trainer.train(num_epochs=config.train.num_epochs)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Visualize keypoints on a video.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="If present, the script will resume from the last checkpoint",
+    )
+    args = parser.parse_args()
+    return args
+
+
 def main():
+    args = parse_args()
     config = load_config("config/one_plane.yaml")
     config.data.train_path = "dataset/train"
     config.data.val_path = "dataset/val"
+    config.resume = args.resume
+    config.checkpoint_path = "checkpoint/best_checkpoint.pth"
 
     print("[INFO] Config loaded:")
     config.dump()
