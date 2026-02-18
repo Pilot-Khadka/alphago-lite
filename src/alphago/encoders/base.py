@@ -1,6 +1,7 @@
-from typing import Any
+from typing import Tuple
 
 import importlib
+from ..go import Point
 
 
 class Encoder:
@@ -13,13 +14,14 @@ class Encoder:
     def encode_point(self, point):
         raise NotImplementedError()
 
-    def decode_point_index(self, index):
+    def decode_point_index(self, index) -> Point:
         raise NotImplementedError()
 
     def num_points(self):
         raise NotImplementedError()
 
-    def shape(self):
+    def shape(self) -> Tuple[int, int, int]:
+        # example: (1,19,19)
         raise NotImplementedError()
 
 

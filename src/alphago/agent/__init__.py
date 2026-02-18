@@ -1,1 +1,4 @@
-from . import naive
+from .base import Agent
+from .random import RandomAgent
+from .dl_agent import DeepLearningAgent
+from .policy_agent import PolicyAgent

@@ -1,7 +1,7 @@
 from typing import Optional
 from abc import abstractmethod
 
-from ..goboard import Move
+from ..go.goboard import Move
 
 
 class Agent:

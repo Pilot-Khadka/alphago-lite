@@ -1,6 +1,6 @@
 import numpy as np
 
-from .. import goboard
+from ..go import goboard
 from .helpers import is_point_an_eye
 from alphago.agent.base import Agent
 

@@ -2,7 +2,7 @@ import numpy as np
 
 
 from ..encoders.base import Encoder
-from ..goboard import Move, Point
+from ..go.goboard import Move, Point
 
 
 class SevenPlaneEncoder(Encoder):

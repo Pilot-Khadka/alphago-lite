@@ -24,7 +24,7 @@ def main():
         weight_decay=config.optimizer.weight_decay,
     )
 
-    trainer.load_checkpoint("checkpoint/best_checkpoint.pth")
+    trainer.load_checkpoint("checkpoint/best.pth")
     trainer.validate()
 
 

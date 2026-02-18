@@ -7,43 +7,16 @@ import statistics
 from tqdm import tqdm
 from pathlib import Path
 
+
 import torch
 import torch.nn as nn
 
-from alphago import gotypes, goboard
+from alphago.go import gotypes, goboard
 from alphago.encoders import OnePlaneEncoder
 from alphago.networks import SmallResidualNetwork
-from alphago.agent.policy_agent import PolicyAgent
+from alphago.agent.policy_agent import PolicyAgent, ExperienceCollector
 
-
-def normalize_ddp_keys(state_dict: dict, expect_ddp: bool = False) -> dict:
-    new_sd = {}
-
-    for k, v in state_dict.items():
-        original = k
-        while k.startswith("module."):
-            k = k[len("module.") :]
-
-        if expect_ddp and original.startswith("module."):
-            k = f"module.{k}"
-
-        new_sd[k] = v
-
-    return new_sd
-
-
-def load_model(model: nn.Module, checkpoint_path: Path) -> nn.Module:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    state_dict = checkpoint.get("model_state_dict", checkpoint)
-
-    state_dict = normalize_ddp_keys(state_dict, expect_ddp=False)
-    model.load_state_dict(state_dict)
-
-    model.to(device)
-    model.eval()
-    return model
+from alphago.util import load_model
 
 
 class DLWrapper(nn.Module):
@@ -67,29 +40,36 @@ def build_agent(encoder: OnePlaneEncoder, checkpoint_path: Path, device: torch.d
     )
     model = load_model(model, checkpoint_path)
     wrapper = DLWrapper(model, device=device)
-    return PolicyAgent(model=wrapper, encoder=encoder)
+    agent = PolicyAgent(model=wrapper, encoder=encoder)
+    agent.set_collector(ExperienceCollector())
+    return agent
 
 
 def run_multiple_games(
     agent_black,
     agent_white,
+    save_path: Path,
     board_size: int = 19,
     num_games: int = 5,
 ):
     all_results = []
 
     for i in tqdm(range(1, num_games + 1), desc="Running Games"):
-        result = run_game(agent_black, agent_white, board_size)
+        result = run_game(
+            agent_black=agent_black,
+            agent_white=agent_white,
+            save_path=save_path,
+            board_size=board_size,
+        )
         all_results.append(result)
 
     winners = [res["winner"] for res in all_results]
     total_moves_list = [res["total_moves"] for res in all_results]
     total_times = [res["total_time"] for res in all_results]
 
-    print("\n=== Games Summary ===")
-    print(f"Games played: {num_games}")
-    print(f"Black wins: {winners.count(gotypes.Player.black)}")
-    print(f"White wins: {winners.count(gotypes.Player.white)}")
+    print(f"Games played:   {num_games}")
+    print(f"Black wins:     {winners.count(gotypes.Player.black)}")
+    print(f"White wins:     {winners.count(gotypes.Player.white)}")
     print(f"Avg moves/game: {statistics.mean(total_moves_list):.2f}")
     print(f"Avg time/game:  {statistics.mean(total_times):.2f}s")
 
@@ -109,7 +89,7 @@ def run_multiple_games(
         print(f"  Avg reward/move:   {avg_reward:.4f}")
 
 
-def run_game(agent_black, agent_white, board_size: int = 19):
+def run_game(agent_black, agent_white, save_path: Path, board_size: int = 19):
     bots: Dict[gotypes.Player, PolicyAgent] = {
         gotypes.Player.black: agent_black,
         gotypes.Player.white: agent_white,
@@ -145,7 +125,8 @@ def run_game(agent_black, agent_white, board_size: int = 19):
             bot.collector.complete_episode(reward)
 
             buffer = bot.collector.to_buffer()
-            buffer.save(f"experience_{player}.pt")
+            final_path = save_path / f"experience_{player}.pt"
+            buffer.save(final_path)
 
             total_reward = sum(buffer.rewards)
             avg_reward = (
@@ -175,9 +156,11 @@ def run_game(agent_black, agent_white, board_size: int = 19):
 
 
 def main():
+    num_games = 5
     board_size = 19
     checkpoint_path = Path("checkpoint/best_checkpoint.pth")
-    num_games = 5
+    save_path = Path("experience")
+    save_path.mkdir(exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     encoder = OnePlaneEncoder(board_size)
@@ -185,7 +168,13 @@ def main():
     agent_black = build_agent(encoder, checkpoint_path, device)
     agent_white = build_agent(encoder, checkpoint_path, device)
 
-    run_multiple_games(agent_black, agent_white, board_size, num_games)
+    run_multiple_games(
+        agent_black=agent_black,
+        agent_white=agent_white,
+        save_path=save_path,
+        board_size=board_size,
+        num_games=num_games,
+    )
 
 
 if __name__ == "__main__":

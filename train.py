@@ -19,7 +19,7 @@ def main():
     args = parse_args()
     config = load_config("config/one_plane.yaml")
     config.resume = args.resume
-    config.checkpoint_path = "checkpoint/best_checkpoint.pth"
+    config.checkpoint_path = "checkpoint/best.pth"
 
     print("[INFO] Config loaded:")
     config.dump()

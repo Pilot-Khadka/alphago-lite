@@ -1,4 +1,4 @@
-from ..gotypes import Point
+from ..go.gotypes import Point
 
 
 def is_point_an_eye(board, point, color):

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from .. import goboard
+from ..go import goboard
 from .helpers import is_point_an_eye
 from alphago.agent.base import Agent
 
@@ -54,11 +54,15 @@ class ExperienceCollector:
         self.current_episode_states.append(state)
         self.current_episode_actions.append(action)
 
-    def complete_episode(self, reward):
+    def complete_episode(self, reward, gamma=0.99):
         num_states = len(self.current_episode_states)
+        discounted = np.zeros(num_states)
+        discounted[-1] = reward
+        for t in reversed(range(num_states - 1)):
+            discounted[t] = gamma * discounted[t + 1]
         self.states += self.current_episode_states
         self.actions += self.current_episode_actions
-        self.rewards += [reward for _ in range(num_states)]
+        self.rewards += discounted.tolist()
         self.current_episode_states = []
         self.current_episode_actions = []
 
@@ -68,6 +72,22 @@ class ExperienceCollector:
             actions=np.array(self.actions),
             rewards=np.array(self.rewards),
         )
+
+
+def prepare_experience_data(
+    experience: ExperienceBuffer,
+    board_width: int,
+    board_height: int,
+):
+    experience_size = experience.actions.shape[0]
+    target_vectors = np.zeros((experience_size, board_width * board_height))
+
+    for i in range(experience_size):
+        action = experience.actions[i]
+        reward = experience.rewards[i]
+        target_vectors[i][action] = reward
+
+    return target_vectors
 
 
 class PolicyAgent(Agent):
@@ -112,3 +132,22 @@ class PolicyAgent(Agent):
         if self.collector is not None:
             self.collector.record_decision(encoded_state, -1)
         return goboard.Move.pass_turn()
+
+    def encode_state(self, game_state) -> np.ndarray:
+        return self._encoder.encode(game_state)
+
+    def train(self, experience, lr, clipnorm, batch_size):
+        target_vectors = prepare_experience_data(
+            experience,
+            self._encoder.board_width,
+            self._encoder.board_height,
+        )
+
+        self._model.train(
+            experience.states,
+            target_vectors,
+            epochs=1,
+            batch_size=batch_size,
+            learning_rate=lr,
+            clipnorm=clipnorm,
+        )

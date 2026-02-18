@@ -32,7 +32,7 @@ class GoTrainer:
         weight_decay: float,
         train_dataset: Dataset | None = None,
         num_workers: int = 4,
-        save_dir: Path = Path("checkpoint"),
+        save_dir: Path = Path("checkpoint/dl"),
         is_notebook: bool = False,
     ):
         self.save_dir = save_dir
@@ -262,10 +262,10 @@ class GoTrainer:
             "train_history": self.train_history,
         }
 
-        torch.save(checkpoint, os.path.join(self.save_dir, "latest_checkpoint.pth"))
+        torch.save(checkpoint, os.path.join(self.save_dir, "last.pth"))
 
         if is_best:
-            torch.save(checkpoint, os.path.join(self.save_dir, "best_checkpoint.pth"))
+            torch.save(checkpoint, os.path.join(self.save_dir, "best.pth"))
             print(f"New best model saved with validation accuracy: {val_accuracy:.2f}%")
 
     def load_checkpoint(self, checkpoint_path: str):

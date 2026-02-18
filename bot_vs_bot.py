@@ -1,8 +1,8 @@
 import time
 import statistics
 
-from alphago import gotypes
-from alphago import goboard
+from alphago.go import gotypes
+from alphago.go import goboard
 
 from alphago.agent.mcts import MCTSBot
 from alphago.util.display_board import print_move, GoBoardDisplay
@@ -47,19 +47,19 @@ def main():
     max_move_time = max(move_times)
     min_move_time = min(move_times)
 
-    print(f"Total game time:      {total_time:.2f} seconds")
-    print(f"Total moves:          {total_moves}")
-    print(f"Average time per move: {avg_move_time:.4f} seconds")
-    print(f"Median time per move:  {median_move_time:.4f} seconds")
-    print(f"Fastest move:         {min_move_time:.4f} seconds")
-    print(f"Slowest move:         {max_move_time:.4f} seconds")
-    print(f"Moves per second:     {total_moves / total_time:.2f}")
+    print(f"Total game time:        {total_time:.2f} seconds")
+    print(f"Total moves:            {total_moves}")
+    print(f"Average time per move:  {avg_move_time:.4f} seconds")
+    print(f"Median time per move:   {median_move_time:.4f} seconds")
+    print(f"Fastest move:           {min_move_time:.4f} seconds")
+    print(f"Slowest move:           {max_move_time:.4f} seconds")
+    print(f"Moves per second:       {total_moves / total_time:.2f}")
 
     if len(move_times) > 20:
         early_moves = statistics.mean(move_times[:10])
         late_moves = statistics.mean(move_times[-10:])
         print(f"\nFirst 10 moves avg:   {early_moves:.4f} seconds")
-        print(f"Last 10 moves avg:    {late_moves:.4f} seconds")
+        print(f"Last 10 moves avg:      {late_moves:.4f} seconds")
 
 
 if __name__ == "__main__":
