@@ -2,8 +2,8 @@ import random
 import time
 import math
 
-from ..goboard import Move
-from ..gotypes import Point
+from ..go.goboard import Move
+from ..go.gotypes import Point
 from ..agent.base import Agent
 
 

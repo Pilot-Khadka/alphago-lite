@@ -19,10 +19,8 @@ jobs:
       - name: Install uv and Python
         uses: astral-sh/setup-uv@v5
         with:
-          # This replaces "uv python install" and "setup-python"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
       - name: Run tests
-        # This one command replaces venv creation, pip install, AND activation
         run: uv run --extra test pytest -v --cov=alphago

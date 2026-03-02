@@ -7,7 +7,7 @@ Each move is ;B[xy] or ;W[xy] where:
 from typing import List, Tuple, Optional
 
 import re
-from ..goboard import Move, Point, GameState
+from ..go.goboard import Move, Point, GameState
 
 
 def sgf_to_coords(sgf_coord) -> Optional[Tuple]:

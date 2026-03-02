@@ -91,16 +91,21 @@ def prepare_experience_data(
 
 
 class PolicyAgent(Agent):
-    def __init__(self, model, encoder):
+    def __init__(self, model, encoder, device: torch.device):
         super().__init__()
         self._model = model
         self._encoder = encoder
+        self._device = device
         self.eps = 1e-6
         self.collector = None
 
-    def predict(self, game_state):
-        encoded_state = self._encoder.encode(game_state)
-        return self._model.predict(np.array([encoded_state]))
+    @torch.no_grad()
+    def predict(self, encoded_state):
+        input_arr = np.array([encoded_state])
+        input_tensor = torch.tensor(input_arr, dtype=torch.float32, device=self._device)
+        logits = self._model(input_tensor)
+        probs = torch.softmax(logits, dim=-1)
+        return probs.squeeze(0).cpu().numpy()
 
     def set_collector(self, collector):
         self.collector = collector
@@ -109,7 +114,7 @@ class PolicyAgent(Agent):
         encoded_state = self._encoder.encode(game_state)
 
         num_moves = self._encoder.board_size**2
-        move_probs = self.predict(game_state).reshape(-1)  # shape (board_size^2,)
+        move_probs = self.predict(encoded_state).reshape(-1)  # shape (board_size^2,)
 
         move_probs = move_probs**3
         move_probs = np.clip(move_probs, self.eps, 1 - self.eps)
@@ -135,19 +140,3 @@ class PolicyAgent(Agent):
 
     def encode_state(self, game_state) -> np.ndarray:
         return self._encoder.encode(game_state)
-
-    def train(self, experience, lr, clipnorm, batch_size):
-        target_vectors = prepare_experience_data(
-            experience,
-            self._encoder.board_width,
-            self._encoder.board_height,
-        )
-
-        self._model.train(
-            experience.states,
-            target_vectors,
-            epochs=1,
-            batch_size=batch_size,
-            learning_rate=lr,
-            clipnorm=clipnorm,
-        )

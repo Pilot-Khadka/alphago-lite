@@ -328,3 +328,16 @@ class GameState:
         not_ko = not self.does_move_violate_ko(self.next_player, move)
 
         return is_empty and not_suicide and not_ko
+
+    def legal_moves(self):
+        moves = []
+        for row in range(1, self.board.size + 1):
+            for col in range(1, self.board.size + 1):
+                move = Move.play(Point(row, col))
+                if self.is_valid_move(move):
+                    moves.append(move)
+
+        moves.append(Move.pass_turn())
+        moves.append(Move.resign())
+
+        return moves

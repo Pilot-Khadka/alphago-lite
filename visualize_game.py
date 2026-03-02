@@ -1,7 +1,7 @@
 import time
 
-from alphago import goboard
-from alphago.goboard import Point, Move
+from alphago.go import goboard
+from alphago.go.goboard import Point, Move
 from alphago.util.display_board import GoBoardDisplay, print_move
 from alphago.data import (
     read_txt_files,
