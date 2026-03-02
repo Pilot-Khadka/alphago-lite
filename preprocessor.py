@@ -8,12 +8,14 @@ from pathlib import Path
 
 from alphago.data.sharding import split_shards
 from alphago.data.preprocessor import GoGamePreprocessor
-from alphago.encoders.oneplane import OnePlaneEncoder
+
+# from alphago.encoders.oneplane import OnePlaneEncoder
+from alphago.encoders.alphago_encoder import AlphaGoEncoder
 from alphago.data import extract_board_size
 
 
 DATA_DIR = Path("external/computer-go-dataset/Professional/")
-OUTPUT_DIR = Path("dataset/")
+OUTPUT_DIR = Path("dataset/alphago/")
 SHARD_SIZE = 500_000
 SPLIT_RATIOS = (0.8, 0.1, 0.1)
 
@@ -62,7 +64,8 @@ def main() -> None:
 
     print(f"Inferred board size: {board_size}")
 
-    encoder = OnePlaneEncoder(board_size=board_size)
+    # encoder = OnePlaneEncoder(board_size=board_size)
+    encoder = AlphaGoEncoder(board_size=board_size)
 
     preprocessor = GoGamePreprocessor(
         encoder=encoder,

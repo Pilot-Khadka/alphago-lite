@@ -414,7 +414,6 @@ class TestPlane46_LadderCapture:
 class TestPlane47_LadderEscape:
     def test_own_stone_can_escape_sets_plane(self):
         """Black in atari (1 liberty) that the ladder search says can escape."""
-        pt = Point(2, 2)
         board = make_board(
             stone_map={
                 Point(2, 2): Player.black,
@@ -431,7 +430,6 @@ class TestPlane47_LadderEscape:
         assert planes[47, 1, 1] == 1
 
     def test_own_stone_cannot_escape_does_not_set_plane(self):
-        pt = Point(2, 2)
         board = make_board(
             stone_map={
                 Point(2, 2): Player.black,
@@ -515,15 +513,9 @@ class TestLadderCaptured:
         gs = GoString(Player.white, frozenset({Point(1, 1)}), frozenset())
 
         board = Board(BOARD_SIZE)
-
-        # Directly assign the string to the board grid.
-        # No hashing, no place_stone call.
         board._grid[Point(1, 1)] = gs
-
         state = make_game_state(board, next_player=Player.black)
-
         result = ENC._ladder_captured(state, Point(1, 1), Player.black, depth=5)
-
         assert result is True
 
     def test_three_liberties_escapes(self):

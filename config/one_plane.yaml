@@ -3,8 +3,8 @@ data:
   train_path: dataset/train/
   val_path: dataset/val/
   board_size: 19
-  train_games: 100
-  val_games: 20
+  # train_games: 100
+  # val_games: 20
   max_moves_per_game: 300
 
 loader:

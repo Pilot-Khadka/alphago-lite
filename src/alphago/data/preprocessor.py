@@ -3,9 +3,9 @@ import numpy as np
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from ..gotypes import Point
+from ..go.gotypes import Point
 from ..encoders.base import Encoder
-from ..goboard import GameState, Move
+from ..go.goboard import GameState, Move
 from ..data.file_utils import extract_moves, setup_handicap_game
 
 
