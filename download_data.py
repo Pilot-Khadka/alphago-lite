@@ -34,8 +34,8 @@ def main() -> None:
             print(f"Dataset '{name}' already present at {data_dir}, skipping.")
             continue
 
-        ds_type = meta.get("type", "git")
-        url = meta.get("url")
+        ds_type = meta.type
+        url = meta.url
 
         if not url:
             print(f"No URL specified for '{name}', skipping.")

@@ -1,4 +1,6 @@
 import os
+import json
+import zipfile
 import numpy as np
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -9,6 +11,10 @@ from ..go.goboard import GameState, Move
 from ..data.file_utils import extract_moves, setup_handicap_game
 
 
+CHECKPOINT_FILE = "checkpoint.json"
+SHARDS_PER_ZIP = 1
+
+
 class GoGamePreprocessor:
     def __init__(
         self,
@@ -17,6 +23,7 @@ class GoGamePreprocessor:
         output_directory: str,
         use_float16: bool = True,
         board_size: int = 19,
+        use_tqdm: bool = False,
     ):
         if not os.path.exists(data_directory):
             raise RuntimeError(f"path {data_directory} does not exists")
@@ -26,56 +33,105 @@ class GoGamePreprocessor:
         self.data_dir = data_directory
         self.output_dir = output_directory
         self.use_float16 = use_float16
+        self.use_tqdm = use_tqdm
 
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.board_dtype = np.float16 if use_float16 else np.float32
         self.move_dtype = np.uint16
 
+    def _checkpoint_path(self):
+        return os.path.join(self.output_dir, CHECKPOINT_FILE)
+
+    def _load_checkpoint(self) -> int:
+        path = self._checkpoint_path()
+        if os.path.exists(path):
+            with open(path) as f:
+                return json.load(f)["next_shard_game_offset"]
+        return 0
+
+    def _save_checkpoint(self, next_shard_game_offset: int) -> None:
+        with open(self._checkpoint_path(), "w") as f:
+            json.dump({"next_shard_game_offset": next_shard_game_offset}, f)
+
+    def _shard_npy_paths(self, shard_id: int) -> tuple[str, str]:
+        prefix = f"shard_{shard_id:04d}_"
+        boards = os.path.join(self.output_dir, f"{prefix}boards.npy")
+        moves = os.path.join(self.output_dir, f"{prefix}moves.npy")
+        return boards, moves
+
+    def _zip_shard_group(self, shard_ids: list[int]) -> None:
+        first, last = shard_ids[0], shard_ids[-1]
+        zip_name = f"shards_{first:04d}-{last:04d}.zip"
+        zip_path = os.path.join(self.output_dir, zip_name)
+
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for shard_id in shard_ids:
+                for npy_path in self._shard_npy_paths(shard_id):
+                    if os.path.exists(npy_path):
+                        zf.write(npy_path, arcname=os.path.basename(npy_path))
+                        os.remove(npy_path)
+
+        print(f"Compressed shards {first}-{last} → {zip_name}")
+
     def preprocess(
         self,
         all_games: list[str],
+        games_per_shard: int = 5000,
         max_moves_per_game: int | None = None,
         num_processes: int = 4,
-        shard_size: int = 100_000,
     ) -> None:
-        print(f"Processing {len(all_games)} games...")
+        resume_offset = self._load_checkpoint()
+        if resume_offset > 0:
+            print(
+                f"Resuming from game {resume_offset} (skipping {resume_offset} already-processed games)"
+            )
 
-        shard_id = 0
-        boards_buf: list[np.ndarray] = []
-        moves_buf: list[np.ndarray] = []
+        shard_id = resume_offset // games_per_shard
+        total_games = len(all_games)
 
-        batch_size = 5000
-        offset = 0
+        print(
+            f"Processing {total_games - resume_offset} remaining games ({total_games} total)..."
+        )
 
-        while offset < len(all_games):
-            batch = all_games[offset : offset + batch_size]
-            offset += batch_size
+        # Tracks shard IDs that have been written but not yet zipped.
+        pending_shard_ids: list[int] = []
+
+        for offset in range(resume_offset, total_games, games_per_shard):
+            game_slice = all_games[offset : offset + games_per_shard]
 
             results = self._process_game_batch(
-                batch,
-                batch_offset=offset - batch_size,
+                game_slice,
+                batch_offset=offset,
                 max_moves_per_game=max_moves_per_game,
                 num_processes=num_processes,
             )
+
+            boards_buf: list[np.ndarray] = []
+            moves_buf: list[np.ndarray] = []
 
             for result in results:
                 if result is None:
                     continue
 
-                # pyrefly: ignore [bad-argument-type]
+                # pyrefly: ignore
                 boards_buf.extend(result["boards"])
-                # pyrefly: ignore [bad-argument-type]
+                # pyrefly: ignore
                 moves_buf.append(result["moves"])
 
-                if len(boards_buf) >= shard_size:
-                    self._flush_shard(boards_buf, moves_buf, shard_id)
-                    shard_id += 1
-                    boards_buf.clear()
-                    moves_buf.clear()
+            if boards_buf:
+                self._flush_shard(boards_buf, moves_buf, shard_id)
+                pending_shard_ids.append(shard_id)
 
-        if boards_buf:
-            self._flush_shard(boards_buf, moves_buf, shard_id)
+                if len(pending_shard_ids) == SHARDS_PER_ZIP:
+                    self._zip_shard_group(pending_shard_ids)
+                    pending_shard_ids = []
+
+            self._save_checkpoint(offset + len(game_slice))
+            shard_id += 1
+
+        if pending_shard_ids:
+            self._zip_shard_group(pending_shard_ids)
 
         print("Done.")
 
@@ -87,10 +143,10 @@ class GoGamePreprocessor:
         boards = boards[perm]
         moves = moves[perm]
 
-        prefix = f"shard_{shard_id:04d}_"
-        self._write_shard(boards, moves, prefix)
-
-        print(f"Saved shard {shard_id}: {len(moves)} positions")
+        self._write_shard(boards, moves, f"shard_{shard_id:04d}_")
+        print(
+            f"Saved shard {shard_id}: {len(moves)} positions from {len(moves_buf)} games"
+        )
 
     def _write_shard(self, boards: np.ndarray, moves: np.ndarray, prefix: str) -> None:
         np.save(os.path.join(self.output_dir, f"{prefix}boards.npy"), boards)
@@ -178,22 +234,38 @@ class GoGamePreprocessor:
         ]
 
         batch_results = []
+        total = len(batch_data)
+
         with ProcessPoolExecutor(max_workers=num_processes) as executor:
             future_to_game = {
                 executor.submit(self._process_single_game, data): data[0]
                 for data in batch_data
             }
 
-            for future in tqdm(
-                as_completed(future_to_game),
-                total=len(batch_data),
-                desc="Processing games",
-            ):
+            if self.use_tqdm:
+                iterator = tqdm(
+                    as_completed(future_to_game),
+                    total=total,
+                    desc="Processing games",
+                )
+            else:
+                iterator = as_completed(future_to_game)
+
+            completed = 0
+            for future in iterator:
                 game_idx = future_to_game[future]
                 try:
                     batch_results.append(future.result())
                 except Exception as e:
                     print(f"Game {game_idx} failed: {e}")
                     batch_results.append(None)
+
+                if not self.use_tqdm:
+                    completed += 1
+                    if completed % 100 == 0:
+                        print(f"Completed {completed}/{total} games", end="\r")
+
+        if not self.use_tqdm:
+            print()
 
         return batch_results
