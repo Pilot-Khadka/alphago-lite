@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import NamedTuple
 
 
 class Player(Enum):
@@ -10,36 +11,22 @@ class Player(Enum):
         return Player.black if self == Player.white else Player.white
 
 
-class Point:
+class Point(NamedTuple):
     """
     for immutability, and hashability
     also, access it as point.row and point.col instead of point[0] and point[1]
     """
 
-    def __init__(self, row, col):
-        self.row = row
-        self.col = col
-        self._neighbors = None
+    row: int
+    col: int
 
     def neighbors(self):
-        if self._neighbors is None:
-            return [
-                Point(self.row - 1, self.col),  # up
-                Point(self.row + 1, self.col),  # down
-                Point(self.row, self.col - 1),  # left
-                Point(self.row, self.col + 1),  # right
-            ]
-        return self._neighbors
-
-    def __eq__(self, other):
-        """Two points are equal if they have the same row and col"""
-        return (
-            isinstance(other, Point) and self.row == other.row and self.col == other.col
-        )
-
-    def __hash__(self):
-        """Make Point hashable so it can be used as a dictionary key"""
-        return hash((self.row, self.col))
+        return [
+            Point(self.row - 1, self.col),  # up
+            Point(self.row + 1, self.col),  # down
+            Point(self.row, self.col - 1),  # left
+            Point(self.row, self.col + 1),  # right
+        ]
 
     def __str__(self):
         """String representation for debugging"""
