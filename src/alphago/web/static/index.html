@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>alphago-lite</title>
+<style>
+  :root { --bg: #f4efe6; --ink: #2b2b2b; --muted: #6b6359; --line: #d8cfc0; --accent: #2b2b2b; --err: #b3261e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 system-ui, sans-serif; }
+  main { display: flex; gap: 24px; padding: 16px; justify-content: center; align-items: flex-start; }
+  #wrap { flex: 0 1 auto; width: min(100%, calc(100vh - 32px)); min-width: 0; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.15); touch-action: manipulation; }
+  aside { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
+  legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
+  select, button { font: inherit; padding: 6px 8px; border-radius: 5px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+  button { cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); grid-column: 1 / -1; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #status { font-weight: 600; min-height: 1.4em; }
+  #info, .hint { color: var(--muted); font-size: 13px; }
+  #model { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+  #model dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  #model dt { color: var(--muted); }
+  #model dd { margin: 0; overflow-wrap: anywhere; }
+  #error { color: var(--err); font-size: 13px; min-height: 1.2em; }
+  @media (max-width: 760px) { main { flex-direction: column; } aside { width: 100%; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="wrap"><canvas id="board"></canvas></div>
+  <aside>
+    <h1>alphago-lite</h1>
+    <fieldset>
+      <legend>New game</legend>
+      <label for="black">Black</label><select id="black"></select>
+      <label for="white">White</label><select id="white"></select>
+      <label for="size">Size</label>
+      <select id="size"><option>9</option><option>13</option><option selected>19</option></select>
+      <button id="new" class="primary">Start</button>
+    </fieldset>
+    <div id="status">Connecting…</div>
+    <div id="info"></div>
+    <div class="row">
+      <button id="pass">Pass</button>
+      <button id="undo">Undo</button>
+      <button id="resign">Resign</button>
+      <button id="pause">Pause</button>
+    </div>
+    <div id="error"></div>
+    <section id="model"></section>
+    <div class="hint">Keys: P pass · U undo · N new game</div>
+  </aside>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const canvas = $("board"), ctx = canvas.getContext("2d");
+const COLS = "ABCDEFGHJKLMNOPQRST";
+const STARS = { 9: [2, 4, 6], 13: [3, 6, 9], 19: [3, 9, 15] };
+let ws, state = null, hover = null, bots = [], errorTimer;
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "bots") { bots = msg.bots; fillPlayers(); showModel(); if (!state) newGame(); }
+    else if (msg.type === "state") { state = msg; render(); }
+    else if (msg.type === "error") showError(msg.message);
+  };
+  ws.onclose = () => { $("status").textContent = "Disconnected, retrying…"; setTimeout(connect, 1000); };
+}
+
+function send(msg) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
+
+function fillPlayers() {
+  for (const [id, def] of [["black", "human"], ["white", bots.some(b => b.name === "policy") ? "policy" : "random"]]) {
+    const sel = $(id), prev = sel.value || def;
+    sel.innerHTML = "";
+    for (const name of ["human", ...bots.map(b => b.name)]) sel.add(new Option(name, name));
+    sel.value = [...sel.options].some(o => o.value === prev) ? prev : def;
+  }
+}
+
+function showModel() {
+  const box = $("model"), info = bots.find(b => b.name === "policy")?.info;
+  box.innerHTML = "";
+  if (!info) { box.textContent = "No policy model loaded (random bot only)"; return; }
+  const pct = (x) => x == null ? null : (100 * x).toFixed(1) + "%";
+  const rows = [
+    ["Run", info.run_id], ["Step", info.step?.toLocaleString()],
+    ["Network", info.model], ["Encoder", info.encoder],
+    ["Val top-1", pct(info.val_top1)], ["Val top-5", pct(info.val_top5)],
+    ["File", info.file],
+  ];
+  const dl = document.createElement("dl");
+  for (const [k, v] of rows) {
+    if (v == null) continue;
+    const dt = document.createElement("dt"), dd = document.createElement("dd");
+    dt.textContent = k; dd.textContent = v;
+    dl.append(dt, dd);
+  }
+  const legend = document.createElement("div");
+  legend.className = "hint";
+  legend.textContent = "Policy model";
+  box.append(legend, dl);
+}
+
+function newGame() {
+  send({ type: "new", black: $("black").value, white: $("white").value, size: +$("size").value });
+}
+
+function showError(text) {
+  $("error").textContent = text;
+  clearTimeout(errorTimer);
+  errorTimer = setTimeout(() => ($("error").textContent = ""), 2500);
+}
+
+function humanToMove() {
+  return state && !state.over && state.players[state.next] === "human";
+}
+
+function geometry() {
+  const n = state ? state.size : 19, px = canvas.width;
+  const margin = px / (n + 1);
+  return { n, px, margin, cell: (px - 2 * margin) / (n - 1) };
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const side = Math.min($("wrap").clientWidth, window.innerHeight - 32);
+  canvas.style.width = canvas.style.height = side + "px";
+  canvas.width = canvas.height = Math.round(side * dpr);
+  draw();
+}
+
+function stone(x, y, r, color, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+  if (color === "b") { g.addColorStop(0, "#555"); g.addColorStop(1, "#111"); }
+  else { g.addColorStop(0, "#fff"); g.addColorStop(1, "#cfcfcf"); }
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  const { n, px, margin, cell } = geometry();
+  const pos = (i) => margin + i * cell;
+  ctx.fillStyle = "#dcb35c";
+  ctx.fillRect(0, 0, px, px);
+
+  ctx.strokeStyle = "#3d2b14";
+  ctx.lineWidth = Math.max(1, px / 900);
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    ctx.moveTo(pos(0), pos(i)); ctx.lineTo(pos(n - 1), pos(i));
+    ctx.moveTo(pos(i), pos(0)); ctx.lineTo(pos(i), pos(n - 1));
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = "#3d2b14";
+  for (const r of STARS[n] || []) for (const c of STARS[n] || []) {
+    if (n === 9 && (r === 4) !== (c === 4)) continue;
+    ctx.beginPath(); ctx.arc(pos(c), pos(r), cell * 0.1, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.font = `${Math.round(margin * 0.38)}px system-ui, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let i = 0; i < n; i++) {
+    ctx.fillText(COLS[i], pos(i), margin * 0.45);
+    ctx.fillText(COLS[i], pos(i), px - margin * 0.45);
+    ctx.fillText(n - i, margin * 0.45, pos(i));
+    ctx.fillText(n - i, px - margin * 0.45, pos(i));
+  }
+
+  if (!state) return;
+  const r = cell * 0.47;
+  for (let i = 0; i < n * n; i++) {
+    const s = state.board[i];
+    if (s !== ".") stone(pos(i % n), pos(Math.floor(i / n)), r, s);
+  }
+
+  if (Array.isArray(state.last_move)) {
+    const [row, col] = state.last_move;
+    ctx.strokeStyle = state.board[row * n + col] === "b" ? "#fff" : "#111";
+    ctx.lineWidth = Math.max(1.5, cell * 0.07);
+    ctx.beginPath(); ctx.arc(pos(col), pos(row), r * 0.45, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  if (hover && humanToMove() && state.board[hover.row * n + hover.col] === ".") {
+    stone(pos(hover.col), pos(hover.row), r, state.next[0], 0.45);
+  }
+}
+
+function render() {
+  const s = state, name = (p) => p[0].toUpperCase() + p.slice(1);
+  if (s.over) {
+    $("status").textContent = s.winner === "draw" ? "Game over: draw" : `Game over: ${name(s.winner)} wins (${s.result})`;
+  } else if (s.thinking) {
+    $("status").textContent = `${name(s.next)} (${s.players[s.next]}) is thinking…`;
+  } else if (s.paused) {
+    $("status").textContent = "Paused";
+  } else {
+    $("status").textContent = `${name(s.next)} to move`;
+  }
+  const last = s.last_move === "pass" ? " · last: pass" : "";
+  $("info").textContent = `Move ${s.move_number} · area B ${s.score.black} / W ${s.score.white} (komi ${s.score.komi})${last}`;
+
+  const human = humanToMove();
+  const hasBot = s.players.black !== "human" || s.players.white !== "human";
+  $("pass").disabled = $("resign").disabled = !human;
+  $("undo").disabled = s.move_number === 0;
+  $("pause").disabled = !hasBot || s.over;
+  $("pause").textContent = s.paused ? "Resume" : "Pause";
+  $("size").value = s.size;
+  draw();
+}
+
+function pointFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scale = canvas.width / rect.width;
+  const { n, margin, cell } = geometry();
+  const col = Math.round(((e.clientX - rect.left) * scale - margin) / cell);
+  const row = Math.round(((e.clientY - rect.top) * scale - margin) / cell);
+  return row >= 0 && row < n && col >= 0 && col < n ? { row, col } : null;
+}
+
+canvas.addEventListener("mousemove", (e) => {
+  const p = pointFromEvent(e);
+  if (p?.row !== hover?.row || p?.col !== hover?.col) { hover = p; draw(); }
+});
+canvas.addEventListener("mouseleave", () => { hover = null; draw(); });
+canvas.addEventListener("click", (e) => {
+  const p = pointFromEvent(e);
+  if (p && humanToMove()) send({ type: "play", ...p });
+});
+
+$("new").onclick = newGame;
+$("pass").onclick = () => send({ type: "pass" });
+$("undo").onclick = () => send({ type: "undo" });
+$("resign").onclick = () => send({ type: "resign" });
+$("pause").onclick = () => send({ type: "pause" });
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "SELECT") return;
+  const key = e.key.toLowerCase();
+  if (key === "p" && humanToMove()) send({ type: "pass" });
+  else if (key === "u") send({ type: "undo" });
+  else if (key === "n") newGame();
+});
+
+window.addEventListener("resize", resize);
+resize();
+connect();
+</script>
+</body>
+</html>
