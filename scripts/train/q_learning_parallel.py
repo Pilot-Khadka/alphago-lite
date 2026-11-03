@@ -10,6 +10,7 @@ import numpy as np
 import torch.nn as nn
 
 from alphago.util import load_model
+from alphago.paths import RL_DIR
 from alphago.encoders import OnePlaneEncoder, Encoder
 from alphago.networks import SmallResidualNetwork
 from alphago.agent.policy_agent import ExperienceBuffer
@@ -188,7 +189,7 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--board_size", type=int, default=19)
     parser.add_argument("--temperature", type=float, default=0.05)
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint/self_play")
+    parser.add_argument("--checkpoint_dir", type=str, default=str(RL_DIR / "q_learning"))
     parser.add_argument("--num_workers", type=int, default=None)
     parser.add_argument("--games_per_worker", type=int, default=8)
     return parser.parse_args()

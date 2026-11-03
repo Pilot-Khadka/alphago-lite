@@ -1,8 +1,9 @@
 import os
 import pytest
 from alphago.data import extract_board_size
+from alphago.paths import PRO_GAMES_DIR
 
-DATA_DIR = "external/computer-go-dataset/Professional/"
+DATA_DIR = str(PRO_GAMES_DIR)
 
 
 @pytest.mark.skipif(

@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 from alphago.util.data import load_config
+from alphago.paths import CONFIG_DIR, RAW_DIR
 
 
 def clone_dataset(name: str, url: str, data_dir: Path) -> None:
@@ -19,8 +20,8 @@ def clone_dataset(name: str, url: str, data_dir: Path) -> None:
 
 
 def main() -> None:
-    main_dir = Path("external/")
-    config = load_config(config_path="config/data.yaml")
+    main_dir = RAW_DIR
+    config = load_config(config_path=CONFIG_DIR / "data.yaml")
     datasets = config.datasets
 
     if not datasets:

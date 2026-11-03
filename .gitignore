@@ -1,14 +1,13 @@
 # large files - you can extract them
-checkpoints/
+/data/
+/checkpoints/
+/runs/
+/kaggle_apps/
+/checkpoint/
 track_progress.txt
-external/
-runs/
-dataset/
-checkpoint/
-checkpoints_simple/
 *.zip
 *.txt
-experience/
+evaluation_results.json
 
 
 # Byte-compiled / optimized / DLL files

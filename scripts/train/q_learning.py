@@ -16,6 +16,7 @@ from alphago.agent.policy_agent import (
 )
 from alphago.agent.q_agent import QAgent
 from alphago.util import load_model
+from alphago.paths import RL_DIR
 
 
 class QTrainer:
@@ -290,7 +291,7 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--board_size", type=int, default=19)
     parser.add_argument("--temperature", type=float, default=0.05)
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint/self_play")
+    parser.add_argument("--checkpoint_dir", type=str, default=str(RL_DIR / "q_learning"))
     return parser.parse_args()
 
 

@@ -175,7 +175,7 @@ def get_standard_handicap_positions(board_size, handicap_count):
 
 
 def setup_handicap_game(board_size, handicap_info):
-    game = GameState.new_game(board_size)
+    game = GameState.new_game(board_size, komi=handicap_info["komi"])
     handicap_moves = []
 
     if not handicap_info["is_handicap_game"]:

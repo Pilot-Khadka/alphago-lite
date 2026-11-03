@@ -1,6 +1,7 @@
 import time
 
 from alphago.go import goboard
+from alphago.paths import PRO_GAMES_DIR
 from alphago.go.goboard import Point, Move
 from alphago.util.display_board import GoBoardDisplay, print_move
 from alphago.data import (
@@ -13,7 +14,7 @@ from alphago.data import (
 
 def main():
     board_size = 19
-    folder = "external/computer-go-dataset/Professional/pro2000+.txt"
+    folder = PRO_GAMES_DIR / "pro2000+.txt"
     game = goboard.GameState.new_game(board_size)
     games = read_txt_files(folder)
     moves, handicap_info = extract_moves(games[0])

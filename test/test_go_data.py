@@ -2,6 +2,8 @@ import os
 import re
 from collections import Counter
 
+from alphago.paths import PRO_GAMES_DIR
+
 
 def extract_board_size(sgf_string):
     match = re.search(r"SZ\[(\d+)\]", sgf_string)
@@ -11,7 +13,7 @@ def extract_board_size(sgf_string):
 
 
 def main():
-    data_dir = "external/computer-go-dataset/Professional/"
+    data_dir = str(PRO_GAMES_DIR)
     game_files = [f for f in os.listdir(data_dir) if f.endswith(".txt")]
 
     board_sizes = Counter()
