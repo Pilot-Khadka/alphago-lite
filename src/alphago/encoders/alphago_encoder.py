@@ -67,111 +67,138 @@ class AlphaGoEncoder(Encoder):
         return Point(row=index // self.board_size + 1, col=index % self.board_size + 1)
 
     def encode(self, game_state):
-        planes = np.zeros(
-            (self.num_planes, self.board_size, self.board_size),
-            dtype=np.float32,
-        )
+        size = self.board_size
+        planes = np.zeros((self.num_planes, size, size), dtype=np.float32)
         board = game_state.board
+        neighbors = board._neighbors
         player = game_state.next_player
         opponent = player.other
+        is_over = game_state.is_over()
 
         # planes[3] is filled with 1
         planes[PLANE_ONES] = 1
 
         go_strings = {}
-        for r in range(self.board_size):
-            for c in range(self.board_size):
-                p = Point(r + 1, c + 1)
-                gs = board.get_go_string(p)
-                if gs is not None:
-                    go_strings[p] = gs
+        for p in neighbors:
+            gs = board.get_go_string(p)
+            if gs is not None:
+                go_strings[p] = gs
 
-        # stone color and liberties planes
-        for r in range(self.board_size):
-            for c in range(self.board_size):
-                point = Point(r + 1, c + 1)
-                go_str = go_strings.get(point)
+        liberties = np.zeros((size, size), dtype=np.int32)
+        libs_after = np.zeros((size, size), dtype=np.int32)
+        capture_size = np.zeros((size, size), dtype=np.int32)
+        self_atari = np.zeros((size, size), dtype=np.int32)
 
-                if go_str is not None:
-                    if go_str.color == player:
-                        planes[PLANE_COLOR.start, r, c] = 1
-                    elif go_str.color == opponent:
-                        planes[PLANE_COLOR.start + 1, r, c] = 1
+        # stone color, liberties, and the per-move planes for empty points
+        for point, point_neighbors in neighbors.items():
+            r, c = point.row - 1, point.col - 1
+            go_str = go_strings.get(point)
 
-                    # liberties (1–8+)
-                    self._set_8_plane(
-                        planes, PLANE_LIBERTIES.start, r, c, go_str.num_liberties
-                    )
-                else:
-                    planes[PLANE_COLOR.start + 2, r, c] = 1
+            if go_str is not None:
+                if go_str.color == player:
+                    planes[PLANE_COLOR.start, r, c] = 1
+                elif go_str.color == opponent:
+                    planes[PLANE_COLOR.start + 1, r, c] = 1
+                liberties[r, c] = go_str.num_liberties
+                continue
 
-                    move = Move.play(point)
-                    if not game_state.is_valid_move(move):
-                        continue
+            planes[PLANE_COLOR.start + 2, r, c] = 1
+            if is_over or not game_state._is_legal_play(point):
+                continue
 
-                    if not is_point_an_eye(board, point, player):
-                        planes[PLANE_SENSIBLE, r, c] = 1
+            if not is_point_an_eye(board, point, player):
+                planes[PLANE_SENSIBLE, r, c] = 1
 
-                    libs_after = self._liberties_after_move(
-                        board, point, player, go_strings
-                    )
-                    cap_size = self._capture_size(board, point, player, go_strings)
-                    self_atari = self._self_atari_size(
-                        board, point, player, libs_after, go_strings
-                    )
+            libs, captured, own_size = self._move_features(
+                point, point_neighbors, player, go_strings
+            )
+            libs_after[r, c] = libs
+            capture_size[r, c] = captured
+            if libs == 1:
+                self_atari[r, c] = own_size
 
-                    self._set_8_plane(
-                        planes, PLANE_LIBERTIES_AFTER.start, r, c, libs_after
-                    )
-                    self._set_8_plane(planes, PLANE_CAPTURE_SIZE.start, r, c, cap_size)
-                    self._set_8_plane(planes, PLANE_SELF_ATARI.start, r, c, self_atari)
+        self._set_8_planes(planes, PLANE_LIBERTIES.start, liberties)
+        self._set_8_planes(planes, PLANE_LIBERTIES_AFTER.start, libs_after)
+        self._set_8_planes(planes, PLANE_CAPTURE_SIZE.start, capture_size)
+        self._set_8_planes(planes, PLANE_SELF_ATARI.start, self_atari)
 
         # turns since (6-13)
         # walk backward through game history and record when each point was last played
-        move_age = self._calculate_move_ages(game_state)
+        move_age = self._calculate_move_ages(game_state, go_strings)
         for age in range(1, 9):
             planes[PLANE_TURNS_SINCE.start + age - 1][move_age == age] = 1
 
         ladder_capture_results = {}
         ladder_escape_results = {}
 
-        for r in range(self.board_size):
-            for c in range(self.board_size):
-                p = Point(r + 1, c + 1)
-                go_str = go_strings.get(p)
-                if go_str is None:
-                    continue
+        for p, go_str in go_strings.items():
+            color = go_str.color
+            sid = id(go_str)
+            r, c = p.row - 1, p.col - 1
 
-                color = go_str.color
-                sid = id(go_str)
+            if color == opponent and go_str.num_liberties == 2:
+                if sid not in ladder_capture_results:
+                    ladder_capture_results[sid] = self._ladder_captured(
+                        game_state, p, player, depth=20
+                    )
+                if ladder_capture_results[sid]:
+                    planes[PLANE_LADDER_CAPTURE, r, c] = 1
 
-                if color == opponent and go_str.num_liberties == 2:
-                    if sid not in ladder_capture_results:
-                        ladder_capture_results[sid] = self._ladder_captured(
-                            game_state, p, player, depth=20
-                        )
-                    if ladder_capture_results[sid]:
-                        planes[PLANE_LADDER_CAPTURE, r, c] = 1
-
-                elif color == player and go_str.num_liberties == 1:
-                    if sid not in ladder_escape_results:
-                        ladder_escape_results[sid] = self._ladder_captured(
-                            game_state, p, opponent, depth=20
-                        )
-                    if not ladder_escape_results[sid]:
-                        planes[PLANE_LADDER_ESCAPE, r, c] = 1
+            elif color == player and go_str.num_liberties == 1:
+                if sid not in ladder_escape_results:
+                    ladder_escape_results[sid] = self._ladder_captured(
+                        game_state, p, opponent, depth=20
+                    )
+                if not ladder_escape_results[sid]:
+                    planes[PLANE_LADDER_ESCAPE, r, c] = 1
 
         if self.use_player_plane and player == Player.black:
             planes[48] = 1
 
         return planes
 
+    @staticmethod
+    def _move_features(point, point_neighbors, player, go_strings):
+        """
+        one pass over the neighbors of an empty point
+        returns (liberties after the move, stones captured,
+                 size of own group after the move)
+        """
+        liberties = set()
+        our_stones = {point}
+        captured = 0
+        seen = set()
+
+        for nb in point_neighbors:
+            go_str = go_strings.get(nb)
+            if go_str is None:
+                liberties.add(nb)
+            elif go_str.color == player:
+                our_stones |= go_str.stones
+                liberties |= go_str.liberties
+            elif go_str.num_liberties == 1:
+                liberties |= go_str.liberties
+                liberties |= go_str.stones
+                if id(go_str) not in seen:
+                    captured += len(go_str.stones)
+                    seen.add(id(go_str))
+
+        liberties -= our_stones
+        liberties.discard(point)
+        return len(liberties), captured, len(our_stones)
+
+    @staticmethod
+    def _set_8_planes(planes, base, counts):
+        counts = np.minimum(counts, 8)
+        for count in range(1, 9):
+            planes[base + count - 1] = counts == count
+
     def _set_8_plane(self, planes, base, r, c, count):
         count = min(max(count, 0), 8)
         if count > 0:
             planes[base + count - 1, r, c] = 1
 
-    def _calculate_move_ages(self, game_state):
+    def _calculate_move_ages(self, game_state, go_strings):
         ages = np.full((self.board_size, self.board_size), -1, np.int32)
         state = game_state
         for age in range(1, 9):
@@ -186,76 +213,10 @@ class AlphaGoEncoder(Encoder):
 
         # any stone not visited in the last 8 moves is "8+ moves ago"
         occupied = np.zeros((self.board_size, self.board_size), dtype=bool)
-        for r in range(self.board_size):
-            for c in range(self.board_size):
-                if game_state.board.get(Point(r + 1, c + 1)) is not None:
-                    occupied[r, c] = True
+        for point in go_strings:
+            occupied[point.row - 1, point.col - 1] = True
         ages[(ages == -1) & occupied] = 8
         return ages
-
-    def _liberties_after_move(self, board, point, player, go_strings):
-        liberties = set()
-        our_stones = {point}
-        opponent = player.other
-
-        for nb in point.neighbors():
-            if not board.is_on_board(nb):
-                continue
-            color = board.get(nb)
-            if color is None:
-                liberties.add(nb)
-            elif color == player:
-                go_str = go_strings.get(nb)
-                if go_str is None:
-                    continue
-                our_stones |= go_str.stones
-                liberties |= go_str.liberties
-            elif color == opponent:
-                go_str = go_strings.get(nb)
-                if go_str is None:
-                    continue
-                if go_str.num_liberties == 1:
-                    liberties |= go_str.liberties
-                    liberties |= go_str.stones
-
-        liberties -= our_stones
-        liberties.discard(point)
-        return len(liberties)
-
-    def _capture_size(self, board, point, player, go_strings):
-        opponent = player.other
-        captured = 0
-        seen = set()
-        for nb in point.neighbors():
-            if not board.is_on_board(nb):
-                continue
-            if board.get(nb) == opponent:
-                go_str = go_strings.get(nb)
-                if go_str is None:
-                    continue
-                sid = id(go_str)
-                if sid not in seen and go_str.num_liberties == 1:
-                    captured += len(go_str.stones)
-                    seen.add(sid)
-        return captured
-
-    def _self_atari_size(self, board, point, player, libs_after, go_strings):
-        if libs_after != 1:
-            return 0
-        size = 1
-        seen = set()
-        for nb in point.neighbors():
-            if not board.is_on_board(nb):
-                continue
-            if board.get(nb) == player:
-                go_str = go_strings.get(nb)
-                if go_str is None:
-                    continue
-                sid = id(go_str)
-                if sid not in seen:
-                    size += len(go_str.stones)
-                    seen.add(sid)
-        return size
 
     def _ladder_captured(self, game_state, target_point, chaser, depth):
         if depth == 0:

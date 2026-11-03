@@ -1,6 +1,5 @@
 from typing import Tuple
 
-import importlib
 from ..go import Point
 
 
@@ -25,7 +24,16 @@ class Encoder:
         raise NotImplementedError()
 
 
-def get_encoder_by_name(name, board_size):
-    module = importlib.import_module("src.encoders." + name)
-    constructor = getattr(module, "create")
-    return constructor(board_size)
+def get_encoder_by_name(name, board_size, **kwargs):
+    from .alphago_encoder import AlphaGoEncoder
+    from .oneplane import OnePlaneEncoder
+    from .sevenplane import SevenPlaneEncoder
+
+    encoders = {
+        "oneplane": OnePlaneEncoder,
+        "sevenplane": SevenPlaneEncoder,
+        "alphago": AlphaGoEncoder,
+    }
+    if name not in encoders:
+        raise ValueError(f"unknown encoder {name!r}, expected one of {list(encoders)}")
+    return encoders[name](board_size, **kwargs)

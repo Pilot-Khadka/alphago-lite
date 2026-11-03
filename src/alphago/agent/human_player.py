@@ -1,5 +1,5 @@
 from ..agent.base import Agent
-from ..gotypes import Player
+from ..go.gotypes import Player
 
 
 class HumanPlayer(Agent):

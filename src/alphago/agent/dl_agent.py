@@ -18,7 +18,8 @@ class DeepLearningAgent(Agent):
 
     def select_move(self, game_state):
         num_moves = self.encoder.board_size * self.encoder.board_size
-        move_probs = self.predict(game_state)
+        # networks with a pass output have one extra entry at the end
+        move_probs = self.predict(game_state)[:num_moves]
         move_probs = move_probs**3
         eps = 1e-6
         move_probs = np.clip(move_probs, eps, 1 - eps)

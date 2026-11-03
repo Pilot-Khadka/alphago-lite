@@ -14,7 +14,7 @@ class SevenPlaneEncoder(Encoder):
         return "sevenplane"
 
     def encode(self, game_state):
-        board_tensor = np.zeros(self.shape())
+        board_tensor = np.zeros(self.shape(), dtype=np.float32)
         base_plane = {game_state.next_player: 0, game_state.next_player.other: 3}
         for row in range(self.board_size):
             for col in range(self.board_size):
@@ -26,12 +26,11 @@ class SevenPlaneEncoder(Encoder):
                         game_state.next_player, Move.play(p)
                     ):
                         board_tensor[6][row][col] = 1
-
-                    else:
-                        # pyrefly: ignore [missing-attribute]
-                        liberty_plane = min(3, go_string.num_liberties) - 1
-                        # pyrefly: ignore [missing-attribute]
-                        liberty_plane += base_plane[go_string.color]
+                else:
+                    # planes 0-2 / 3-5: own / opponent stones with 1, 2, 3+ liberties
+                    liberty_plane = min(3, go_string.num_liberties) - 1
+                    liberty_plane += base_plane[go_string.color]
+                    board_tensor[liberty_plane][row][col] = 1
         return board_tensor
 
     def encode_point(self, point):

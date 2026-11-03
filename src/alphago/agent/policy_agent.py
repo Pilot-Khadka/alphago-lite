@@ -112,9 +112,11 @@ class PolicyAgent(Agent):
 
     def select_move(self, game_state):
         encoded_state = self._encoder.encode(game_state)
+        return self.select_move_from_probs(game_state, encoded_state, self.predict(encoded_state))
 
-        num_moves = self._encoder.board_size**2
-        move_probs = self.predict(encoded_state).reshape(-1)  # shape (board_size^2,)
+    def select_move_from_probs(self, game_state, encoded_state, probs):
+        num_moves = self._encoder.num_points()
+        move_probs = np.asarray(probs).reshape(-1)[:num_moves]
 
         move_probs = move_probs**3
         move_probs = np.clip(move_probs, self.eps, 1 - self.eps)

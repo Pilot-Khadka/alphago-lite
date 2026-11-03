@@ -44,7 +44,7 @@ class SmallResidualNetwork(nn.Module):
         x = self.res_blocks(x)
 
         p = self.policy_head(x)
-        p = p.view(p.size(0), -1)
+        p = p.reshape(p.size(0), -1)
         p = self.policy_fc(p)
         return p
 
